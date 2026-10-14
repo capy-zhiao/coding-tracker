@@ -25,10 +25,12 @@ def today_queue(
     db: Session = Depends(get_db),
     review_cap: int | None = Query(None, ge=0, le=50),
     new_cap: int | None = Query(None, ge=0, le=50),
+    shuffle: int | None = Query(None, description="seed: pick reviews at random instead of by priority"),
+    skip: list[int] = Query([], description="problem ids to put last in the review pick"),
 ):
     """What to work on today — this powers the home screen."""
     d = get_today()
-    q = build_today(db, d, review_cap, new_cap)
+    q = build_today(db, d, review_cap, new_cap, shuffle, skip)
     return DailyQueueOut(
         date=d,
         reviews=q.reviews, new_problems=q.new_problems, templates=q.templates,

@@ -71,6 +71,7 @@ export const SHORTCUTS: { keys: string; label: string; where: string }[] = [
   { keys: 'C',      label: 'Check the blind-write',         where: 'Drill' },
   { keys: 'J / K',  label: 'Move down / up the queue',      where: 'Today' },
   { keys: '↵',      label: 'Open the highlighted problem',  where: 'Today' },
+  { keys: 'R',      label: 'Random batch of reviews',       where: 'Today' },
   { keys: 'G',      label: 'Jump to Today',                 where: 'Anywhere' },
   { keys: '?',      label: 'Show this list',                where: 'Anywhere' },
   { keys: 'Esc',    label: 'Close',                         where: 'Anywhere' },

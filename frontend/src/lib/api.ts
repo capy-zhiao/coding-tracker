@@ -29,7 +29,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const qs = (params: Record<string, unknown>) => {
   const p = new URLSearchParams()
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') p.set(k, String(v))
+    if (Array.isArray(v)) v.forEach((x) => p.append(k, String(x)))   // ?skip=1&skip=2
+    else if (v !== undefined && v !== null && v !== '') p.set(k, String(v))
   })
   const s = p.toString()
   return s ? `?${s}` : ''
@@ -39,8 +40,8 @@ export const api = {
   health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string }>('/health'),
 
   // --- daily queue and attempts ---
-  today: (caps?: { review_cap?: number; new_cap?: number }) =>
-    request<DailyQueue>(`/review/today${qs(caps ?? {})}`),
+  today: (opts?: { review_cap?: number; new_cap?: number; shuffle?: number; skip?: number[] }) =>
+    request<DailyQueue>(`/review/today${qs(opts ?? {})}`),
   forecast: (days = 14) =>
     request<{ date: string; count: number; overdue: number }[]>(`/review/forecast${qs({ days })}`),
   suggestGrade: (p: { seconds: number; looked_at_solution: boolean; had_bugs: boolean; difficulty: string }) =>

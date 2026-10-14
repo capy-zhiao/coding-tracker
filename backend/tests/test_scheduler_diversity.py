@@ -113,6 +113,44 @@ def test_today_endpoint_interleaves_chapters(client, db_session):
     assert q["deferred"] == 1
 
 
+def test_next_batch_is_random_and_stable(client, db_session):
+    """'Next batch' sends a seed and the batch on screen. The pick is random, avoids that
+    batch while enough is due, and stays put as its problems get done."""
+    d = study_today()
+    states = {}
+    for number in range(1, 13):
+        p = Problem(number=number, title=f"P{number}", difficulty="Medium",
+                    chapter_num=number, chapter=f"Ch{number}", url="", kind="problem")
+        db_session.add(p)
+        db_session.flush()
+        states[number] = ReviewState(problem_id=p.id, interval_days=1, reps=1,
+                                     lapses=13 - number, due=d - timedelta(days=1))
+        db_session.add(states[number])
+    db_session.commit()
+
+    def pick(**params):
+        q = client.get("/review/today", params={"review_cap": 4, **params}).json()
+        return q, [i["problem"]["number"] for i in q["reviews"]]
+
+    first, by_priority = pick()
+    assert by_priority == [1, 2, 3, 4]
+    on_screen = [i["problem"]["id"] for i in first["reviews"]]
+
+    batches = {tuple(pick(shuffle=seed, skip=on_screen)[1]) for seed in range(20)}
+    assert len(batches) > 1                                     # random
+    assert all(not set(b) & {1, 2, 3, 4} for b in batches)     # avoids the batch on screen
+    q, batch = pick(shuffle=7, skip=on_screen)
+    assert q["total_due"] == 12 and q["deferred"] == 8          # nothing is dropped
+
+    # Finishing one keeps the other three where they were
+    states[batch[0]].due = d + timedelta(days=3)
+    db_session.commit()
+    assert pick(shuffle=7, skip=on_screen)[1][:3] == batch[1:]
+
+    # With fewer due than skipped, skipped ones still fill the batch
+    assert len(pick(shuffle=7, skip=list(range(1, 100)))[1]) == 4
+
+
 # --- new problems ---
 
 from app.neetcode150 import NEETCODE_150, NEETCODE_150_BY_CHAPTER

@@ -18,7 +18,9 @@ and each primary pattern per day, then backfills so no slot goes unused.
 """
 from __future__ import annotations
 
+import random
 from collections import Counter
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -186,7 +188,15 @@ def build_today(
     today: date | None = None,
     review_cap: int | None = None,
     new_cap: int | None = None,
+    shuffle: int | None = None,
+    skip: Collection[int] = (),
 ) -> DailyQueue:
+    """Today's queue.
+
+    Reviews are ranked by priority, unless `shuffle` (a seed) is given: then they're picked
+    at random — "Next batch" on the home screen. `skip` holds ids of the batch being
+    replaced; they go to the back so the new batch is different whenever enough is due.
+    """
     today = today or date.today()
     review_cap = review_cap if review_cap is not None else settings.daily_review_cap
     new_cap = new_cap if new_cap is not None else settings.daily_new_cap
@@ -209,6 +219,12 @@ def build_today(
         ))
     due_items.sort(key=lambda i: i.priority_score, reverse=True)
     queue.total_due = len(due_items)
+    if shuffle is not None:
+        # Each problem gets its own random key, so the same seed gives the same batch, and
+        # finishing one of them doesn't reshuffle the rest
+        due_items.sort(key=lambda i: random.Random(f"{shuffle}:{i.problem.id}").random())
+    skip = set(skip)
+    due_items.sort(key=lambda i: i.problem.id in skip)   # stable: keeps the order above
     queue.reviews = pick_diverse(
         due_items, review_cap,
         settings.daily_per_chapter_cap, settings.daily_per_pattern_cap,

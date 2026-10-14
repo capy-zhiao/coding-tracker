@@ -1,6 +1,6 @@
 // Home screen: what to work on today. This replaces the hand-maintained markdown plan.
 // J / K walk the queue, Enter opens the highlighted item — no mouse needed.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadChart, { type ForecastRow } from '../components/LoadChart'
 import ProblemRow, { rowHref } from '../components/ProblemRow'
@@ -8,18 +8,63 @@ import { api } from '../lib/api'
 import { useHotkeys } from '../lib/useHotkeys'
 import type { DailyQueue, QueueItem } from '../lib/types'
 
+// "Next batch" picks reviews at random. The seed and the batch it replaced are kept for
+// the rest of the day, so opening a problem and coming back shows the same batch.
+const BATCH_KEY = 'today-review-batch'
+type Batch = { date: string; seed: number; skip: number[] }
+
+function loadBatch(): Batch | null {
+  try { return JSON.parse(localStorage.getItem(BATCH_KEY) ?? 'null') } catch { return null }
+}
+
+function saveBatch(b: Batch) {
+  try { localStorage.setItem(BATCH_KEY, JSON.stringify(b)) } catch { /* not kept, still works */ }
+}
+
 export default function Today() {
   // data / loading / error — the standard trio for any page that fetches
   const [queue, setQueue] = useState<DailyQueue | null>(null)
   const [forecast, setForecast] = useState<ForecastRow[]>([])
   const [error, setError] = useState('')
   const [cursor, setCursor] = useState(-1)      // -1 = nothing highlighted yet
+  const [shuffled, setShuffled] = useState(false)
+  const [swapping, setSwapping] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
-    api.today().then(setQueue).catch((e) => setError(e.message))
+    const saved = loadBatch()
+    api.today(saved ? { shuffle: saved.seed, skip: saved.skip } : {})
+      .then(async (q) => {
+        // A batch from an earlier day doesn't carry over: a new day starts by priority
+        if (saved && saved.date !== q.date) q = await api.today()
+        else if (saved) setShuffled(true)
+        setQueue(q)
+      })
+      .catch((e) => setError(e.message))
     api.forecast(14).then(setForecast).catch(() => {})
   }, [])
+
+  // A random batch from everything due today, avoiding the one on screen
+  const nextBatch = async () => {
+    if (!queue || swapping || queue.deferred === 0) return
+    setSwapping(true)
+    try {
+      const batch = {
+        date: queue.date,
+        seed: Math.floor(Math.random() * 2 ** 31),
+        skip: queue.reviews.map((i) => i.problem.id),
+      }
+      const q = await api.today({ shuffle: batch.seed, skip: batch.skip })
+      saveBatch({ ...batch, date: q.date })
+      setShuffled(true)
+      setQueue(q)
+      setCursor(-1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSwapping(false)
+    }
+  }
 
   // One flat list across all three sections, so J/K walk the whole day in order.
   // useMemo keeps the array identity stable between renders.
@@ -43,6 +88,7 @@ export default function Today() {
     k: () => move(-1),
     arrowdown: () => move(1),
     arrowup: () => move(-1),
+    r: () => { void nextBatch() },
     enter: () => {
       const item = flat[cursor]
       if (item) navigate(rowHref(item.problem.number, item.problem.kind))
@@ -75,8 +121,15 @@ export default function Today() {
         </p>
       </div>
 
-      <Section title="🔁 Review" hint="ranked by priority · at most 2 per chapter or pattern, so the day stays mixed"
-               items={queue.reviews} selected={selected} />
+      <Section title="🔁 Review"
+               hint={`${shuffled ? 'random pick' : 'ranked by priority'} · at most 2 per chapter or pattern, so the day stays mixed`}
+               items={queue.reviews} selected={selected}
+               action={queue.deferred > 0 && (
+                 <button className="btn text-xs py-1" onClick={nextBatch} disabled={swapping}
+                         title="Swap in a random batch of today's reviews (R)">
+                   ↻ Next batch
+                 </button>
+               )} />
       <Section title="🆕 New" hint="NeetCode 150, then Top Interview 150, then LeetCode 75 · Bit & Math and Hards wait"
                items={queue.new_problems} selected={selected} />
       <Section title="🔧 Template drill" hint="five minutes of blind writing before you start"
@@ -88,14 +141,17 @@ export default function Today() {
 }
 
 function Section({
-  title, hint, items, selected,
-}: { title: string; hint: string; items: QueueItem[]; selected?: number }) {
+  title, hint, items, selected, action,
+}: { title: string; hint: string; items: QueueItem[]; selected?: number; action?: ReactNode }) {
   return (
     <section className="card">
       <div className="flex items-baseline gap-2 mb-2">
         <h2 className="font-medium">{title}</h2>
         <span className="text-xs text-slate-400">{hint}</span>
-        <span className="ml-auto text-sm text-slate-400">{items.length}</span>
+        <div className="ml-auto flex items-center gap-3">
+          {action}
+          <span className="text-sm text-slate-400">{items.length}</span>
+        </div>
       </div>
       {items.length === 0
         ? <p className="text-sm text-slate-400 px-3 py-2">Nothing here today 🎉</p>
