@@ -4,33 +4,21 @@ Once running, http://localhost:8000/docs serves interactive OpenAPI documentatio
 generated automatically by FastAPI from the type hints.
 """
 import logging
-from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import llm
 from .config import settings
-from .database import Base, engine
 from .deps import require_api_key
 from .routers import mock, problems, review, stats, templates
 
 logging.basicConfig(level=logging.INFO)
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    """Create missing tables on startup.
-
-    This does NOT add columns to tables that already exist — run migrate.py for that
-    (start.sh does). Alembic replaces both once columns start being renamed or dropped.
-    """
-    Base.metadata.create_all(bind=engine)
-    yield
-
-
+# The schema is not created here: migrate.py runs the Alembic migrations before the app
+# starts (start.sh and the Docker entrypoint both call it).
 app = FastAPI(
-    lifespan=lifespan,
     title="LeetCode Tracker API",
     description="Spaced-repetition tracker for the NeetCode 250",
     version="1.0.0",

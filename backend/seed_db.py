@@ -5,8 +5,9 @@ Problems come from data/seed.json (extracted from the NeetCode markdown notes, w
 and solutions) and the study plans in data/ (see app/study_plans.py). Problems in none of
 the lists are removed — but only if they have no practice history.
 
-Usage:  python seed_db.py           incremental: add new problems, keep attempt history
-        python seed_db.py --reset   wipe and start over
+Usage:  python seed_db.py    incremental: add new problems, keep attempt history
+
+Run migrate.py first: it creates and upgrades the tables, this only fills them.
 
 Problems already solved in the markdown notes start out "due today", so the very first
 daily queue picks up where the manual study plan left off.
@@ -20,7 +21,9 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from app.database import Base, SessionLocal, engine
+from sqlalchemy import inspect
+
+from app.database import SessionLocal, engine
 from app.models import Problem, ReviewState
 from app.neetcode150 import NEETCODE_150
 from app.study_plans import (
@@ -71,11 +74,8 @@ TEMPLATES = [
 
 
 def main() -> None:
-    reset = "--reset" in sys.argv
-    if reset:
-        Base.metadata.drop_all(bind=engine)
-        print("Dropped existing tables")
-    Base.metadata.create_all(bind=engine)
+    if not inspect(engine).has_table("problems"):
+        sys.exit("No tables yet - run `python migrate.py` first.")
 
     seed = {p["number"]: p for p in json.loads(SEED.read_text(encoding="utf-8"))["problems"]}
     today = date.today()

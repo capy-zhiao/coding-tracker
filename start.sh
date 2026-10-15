@@ -45,12 +45,13 @@ if [[ ! -d "$FRONTEND/node_modules" ]]; then
 fi
 
 if [[ ! -f "$BACKEND/tracker.db" ]]; then
-  yellow "No database found - importing the 250 problems..."
-  (cd "$BACKEND" && ./.venv/bin/python seed_db.py)
+  yellow "No database found - creating it and importing the problems..."
+  (cd "$BACKEND" && ./.venv/bin/python migrate.py && ./.venv/bin/python seed_db.py) || {
+    red "Database setup failed"; exit 1; }
 else
-  # Adds any columns introduced since this database was created, after taking a dated
-  # backup. Idempotent, and a no-op once the schema is current. The backup matters:
-  # tracker.db is gitignored, so this file is the only copy of your practice history.
+  # Runs any new Alembic migrations, after taking a dated backup. Idempotent, and a no-op
+  # once the schema is current. The backup matters: tracker.db is gitignored, so this
+  # file is the only copy of your practice history.
   (cd "$BACKEND" && ./.venv/bin/python migrate.py) || {
     red "Schema migration failed - your data is untouched, see backend/.backups/"; exit 1; }
   # Refreshes pattern tags and picks up problems added to data/seed.json.

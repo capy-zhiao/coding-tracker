@@ -32,10 +32,14 @@ def test_problem_set_is_the_union():
 
 
 def run_seed(db: Path) -> str:
+    """The same two steps as start.sh: create/upgrade the tables, then load the problems."""
     env = {**os.environ, "DATABASE_URL": f"sqlite:///{db}", "LLM_PROVIDER": "none"}
-    r = subprocess.run([sys.executable, "seed_db.py"], cwd=BACKEND, env=env,
-                       capture_output=True, text=True, check=True)
-    return r.stdout
+    out = ""
+    for script in ("migrate.py", "seed_db.py"):
+        r = subprocess.run([sys.executable, script], cwd=BACKEND, env=env,
+                           capture_output=True, text=True, check=True)
+        out = r.stdout
+    return out
 
 
 def test_seed_builds_the_set_and_prunes_only_untouched_problems(tmp_path):

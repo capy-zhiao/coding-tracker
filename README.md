@@ -90,6 +90,7 @@ shortcuts for most actions.
 
 - Python 3.12+, FastAPI, served with Uvicorn
 - SQLAlchemy 2.0 with SQLite locally and Postgres in production
+- Alembic for schema migrations; `migrate.py` backs up the SQLite file before each run
 - Pydantic v2 for request and response models, pydantic-settings for config from `.env`
 - The spaced-repetition rules and the template grader don't touch the database and take
   the date as a parameter, so they're tested directly; the layer that builds the daily
@@ -124,7 +125,8 @@ Or run them separately:
 cd backend
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 cp .env.example .env
-./.venv/bin/python seed_db.py
+./.venv/bin/python migrate.py      # create or upgrade the tables (backs up SQLite first)
+./.venv/bin/python seed_db.py      # load the problems
 ./.venv/bin/uvicorn app.main:app --reload
 
 # frontend
