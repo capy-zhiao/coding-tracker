@@ -1,5 +1,4 @@
 """Daily queue and attempt submission — the entry point into the SRS engine."""
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -12,7 +11,7 @@ from ..deps import (
     ai_provider, effective_caps, ensure_state, get_current_user, get_problem, notes_for,
     user_today,
 )
-from ..models import Attempt, Problem, User
+from ..models import Attempt, Problem, User, utcnow
 from ..schemas import (
     AttemptIn, AttemptOut, AttemptResult, ComplexityCheck, DailyQueueOut,
     GradeSuggestion, QueueItemOut, StateOut,
@@ -114,7 +113,7 @@ def submit_attempt(
     new_state = srs_review(st.to_srs(), payload.grade, problem.difficulty, d)  # type: ignore[arg-type]
     st.apply(new_state)
     st.total_attempts += 1
-    st.last_attempt_at = datetime.now(timezone.utc)
+    st.last_attempt_at = utcnow()
     if payload.seconds > 0 and (st.best_seconds is None or payload.seconds < st.best_seconds):
         st.best_seconds = payload.seconds
 

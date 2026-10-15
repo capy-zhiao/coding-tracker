@@ -1,4 +1,10 @@
-"""Test fixtures: each test gets its own in-memory database."""
+"""Test fixtures: each test gets its own empty database.
+
+In-memory SQLite by default. CI also runs the suite on Postgres by setting
+TEST_DATABASE_URL to a throwaway database, which is emptied before and after each test.
+"""
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -21,13 +27,20 @@ def no_real_llm(monkeypatch):
     monkeypatch.setattr(llm, "_cached", None)
 
 
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+
+
 @pytest.fixture
 def db_session():
-    engine = create_engine(
-        "sqlite://",                       # in-memory
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,              # share one database across connections
-    )
+    if TEST_DATABASE_URL:
+        engine = create_engine(TEST_DATABASE_URL)
+        Base.metadata.drop_all(bind=engine)      # in case an earlier run died midway
+    else:
+        engine = create_engine(
+            "sqlite://",                       # in-memory
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,              # share one database across connections
+        )
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False)
     session = Session()
@@ -35,6 +48,9 @@ def db_session():
         yield session
     finally:
         session.close()
+        if TEST_DATABASE_URL:
+            Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 @pytest.fixture

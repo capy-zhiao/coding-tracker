@@ -25,8 +25,11 @@ from .database import Base
 from .srs import DEFAULT_EASE, SrsState
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def utcnow() -> datetime:
+    """Now, in UTC, without tzinfo: how every timestamp is stored. The columns are plain
+    TIMESTAMP, and Postgres would shift an aware value by the session's time zone on the
+    way in; deps.local_date() reads a naive value as UTC."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -51,7 +54,7 @@ class User(Base):
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     daily_review_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_new_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     demo_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -89,7 +92,7 @@ class ProblemNote(Base):
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), primary_key=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     code: Mapped[str] = mapped_column(Text, default="")
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class ReviewState(Base):
@@ -130,7 +133,7 @@ class Attempt(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True)
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     grade: Mapped[str] = mapped_column(String(10))               # again/hard/good/easy
     seconds: Mapped[int] = mapped_column(Integer, default=0)
     looked_at_solution: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -164,7 +167,7 @@ class FollowUp(Base):
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), index=True)
     question: Mapped[str] = mapped_column(Text)
     hint: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     problem: Mapped[Problem] = relationship(back_populates="followups")
 
@@ -184,7 +187,7 @@ class InterviewQA(Base):
     key_points: Mapped[str] = mapped_column(Text, default="")    # withheld until answered
     answer: Mapped[str] = mapped_column(Text, default="")
     grade: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     problem: Mapped[Problem] = relationship()

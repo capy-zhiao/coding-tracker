@@ -14,5 +14,5 @@ openai>=1.60
 pytest>=8.4
 httpx>=0.28
 
-# Only needed when deploying against Postgres; local development uses SQLite:
-#   pip install "psycopg[binary]>=3.2"
+# The Postgres driver is in requirements-prod.txt: local setups use SQLite and never
+# need to build it.

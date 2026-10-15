@@ -7,7 +7,6 @@ Two kinds of follow-up:
                in writing and the LLM grades the answer
 """
 import random
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -18,7 +17,7 @@ from ..database import get_db
 from ..deps import (
     ai_provider, get_current_user, get_problem, notes_for, optional_ai_provider, states_for,
 )
-from ..models import FollowUp, InterviewQA, Problem, User
+from ..models import FollowUp, InterviewQA, Problem, User, utcnow
 from ..schemas import (
     AnswerGradeOut, AnswerIn, FollowUpOut, InterviewQuestionOut,
     InterviewStartIn, MockStartOut, ProblemDetail,
@@ -163,7 +162,7 @@ def answer_question(
 
     qa.answer = payload.answer
     qa.grade = grade.model_dump()
-    qa.answered_at = datetime.now(timezone.utc)
+    qa.answered_at = utcnow()
     db.commit()
     return AnswerGradeOut(
         id=qa.id, question=qa.question, answer=qa.answer, key_points=qa.key_points,

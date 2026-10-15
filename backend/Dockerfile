@@ -16,8 +16,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
-COPY backend/requirements.txt .
-RUN pip install -r requirements.txt
+COPY backend/requirements.txt backend/requirements-prod.txt ./
+RUN pip install -r requirements-prod.txt
 
 COPY data /app/data
 COPY backend /app/backend
