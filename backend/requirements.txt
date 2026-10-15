@@ -3,6 +3,9 @@ uvicorn[standard]>=0.37
 sqlalchemy>=2.0.43
 alembic>=1.13
 itsdangerous>=2.2
+# Every IANA zone name, including the old ones browsers still report (Asia/Calcutta),
+# whatever time zone data the server's OS ships
+tzdata>=2024.1
 pydantic>=2.11
 pydantic-settings>=2.11
 python-dotenv>=1.1

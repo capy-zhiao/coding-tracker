@@ -3,6 +3,7 @@ with GitHub OAuth and keeps the session in a signed cookie (app/auth/session.py)
 import logging
 import secrets
 from datetime import datetime, timezone
+from zoneinfo import available_timezones
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -17,7 +18,7 @@ from ..config import settings
 from ..database import get_db
 from ..deps import effective_caps, get_current_user, user_today
 from ..models import User
-from ..schemas import MeOut
+from ..schemas import MeIn, MeOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = logging.getLogger(__name__)
@@ -34,6 +35,26 @@ def me(user: User = Depends(get_current_user)):
         daily_review_cap=review_cap, daily_new_cap=new_cap,
         auth_mode=settings.auth_mode, today=user_today(user),
     )
+
+
+@router.patch("/me", response_model=MeOut)
+def update_me(
+    payload: MeIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Your time zone (which decides when your day starts) and daily limits."""
+    changes = payload.model_dump(exclude_unset=True)
+    if "timezone" in changes:
+        tz = (changes["timezone"] or "").strip() or None
+        if tz is not None and tz not in available_timezones():
+            raise HTTPException(422, f"Unknown time zone {tz!r}")
+        user.timezone = tz
+    for cap in ("daily_review_cap", "daily_new_cap"):
+        if cap in changes:
+            setattr(user, cap, changes[cap])
+    db.commit()
+    return me(user)
 
 
 def _require_github_mode() -> None:

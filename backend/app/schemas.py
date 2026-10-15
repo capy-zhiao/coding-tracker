@@ -28,6 +28,14 @@ class MeOut(BaseModel):
     today: date         # the user's study day; the browser's own date can differ
 
 
+class MeIn(BaseModel):
+    """Your own settings. Send only what changes; null (or an empty time zone) goes back to
+    the server's default."""
+    timezone: str | None = None
+    daily_review_cap: int | None = Field(None, ge=0, le=50)
+    daily_new_cap: int | None = Field(None, ge=0, le=50)
+
+
 class StateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     interval_days: int

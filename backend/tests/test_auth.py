@@ -185,3 +185,31 @@ def test_github_mode_refuses_to_start_with_a_weak_secret(github_mode, monkeypatc
     monkeypatch.setattr(settings, "auth_mode", "magic")
     with pytest.raises(RuntimeError, match="AUTH_MODE"):
         check_auth_settings()
+
+
+# --- your own settings ---------------------------------------------------------------
+
+def test_you_can_set_your_time_zone_and_daily_limits(client):
+    me = client.patch("/auth/me", json={"timezone": "Asia/Tokyo", "daily_review_cap": 6,
+                                        "daily_new_cap": 1}).json()
+    assert (me["timezone"], me["daily_review_cap"], me["daily_new_cap"]) == ("Asia/Tokyo", 6, 1)
+    assert me["today"] == today("Asia/Tokyo").isoformat()
+    q = client.get("/review/today").json()
+    assert q["date"] == me["today"] and q["review_cap"] == 6
+
+
+def test_only_the_fields_sent_change(client):
+    client.patch("/auth/me", json={"timezone": "Asia/Tokyo", "daily_review_cap": 6})
+    me = client.patch("/auth/me", json={"daily_new_cap": 2}).json()
+    assert (me["timezone"], me["daily_review_cap"], me["daily_new_cap"]) == ("Asia/Tokyo", 6, 2)
+
+
+def test_null_goes_back_to_the_server_default(client):
+    client.patch("/auth/me", json={"timezone": "Asia/Tokyo", "daily_review_cap": 6})
+    me = client.patch("/auth/me", json={"timezone": "", "daily_review_cap": None}).json()
+    assert me["timezone"] is None and me["daily_review_cap"] == settings.daily_review_cap
+
+
+def test_bad_settings_are_refused(client):
+    assert client.patch("/auth/me", json={"timezone": "Mars/Olympus_Mons"}).status_code == 422
+    assert client.patch("/auth/me", json={"daily_review_cap": 500}).status_code == 422

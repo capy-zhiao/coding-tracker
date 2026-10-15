@@ -1,6 +1,7 @@
-// Settings: where your AI requests get their key.
+// Settings: your study day and daily limits, and where your AI requests get their key.
 import { useState, type FormEvent } from 'react'
 import { clearAiKey, loadAiKey, saveAiKey, type AiKey } from '../lib/aiKey'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 const field = 'w-full mt-1 text-sm p-2 rounded-lg border border-slate-200 bg-white'
@@ -9,8 +10,73 @@ export default function Settings() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-semibold">Settings</h1>
+      <StudyDay />
       <AiSection />
     </div>
+  )
+}
+
+// Every zone the browser knows, so the list matches what the server accepts (both IANA)
+const ZONES: string[] = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
+  .supportedValuesOf?.('timeZone') ?? []
+const BROWSER_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+function StudyDay() {
+  const { me, setMe } = useAuth()
+  const [tz, setTz] = useState(me?.timezone ?? '')
+  const [reviews, setReviews] = useState(String(me?.daily_review_cap ?? ''))
+  const [fresh, setFresh] = useState(String(me?.daily_new_cap ?? ''))
+  const [note, setNote] = useState('')
+  if (!me) return null
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    try {
+      setMe(await api.updateMe({ timezone: tz || null, daily_review_cap: Number(reviews),
+                                 daily_new_cap: Number(fresh) }))
+      setNote('Saved.')
+    } catch (err) {
+      setNote((err as Error).message)
+    }
+  }
+
+  return (
+    <section className="card space-y-4">
+      <div>
+        <h2 className="font-medium">📅 Study day</h2>
+        <p className="text-sm text-slate-500">
+          Your day starts at midnight in this time zone: it decides when tomorrow's reviews
+          appear and how your streak counts. Today is {me.today}.
+        </p>
+      </div>
+      <form onSubmit={save} className="space-y-3 max-w-md">
+        <label className="block text-sm">
+          Time zone
+          <select value={tz} onChange={(e) => { setTz(e.target.value); setNote('') }} className={field}>
+            <option value="">Server default</option>
+            {ZONES.map((z) => (
+              <option key={z} value={z}>{z}{z === BROWSER_ZONE ? '  (this device)' : ''}</option>
+            ))}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-sm">
+            Reviews per day
+            <input type="number" min={0} max={50} required value={reviews}
+                   onChange={(e) => { setReviews(e.target.value); setNote('') }} className={field} />
+          </label>
+          <label className="block text-sm">
+            New problems per day
+            <input type="number" min={0} max={50} required value={fresh}
+                   onChange={(e) => { setFresh(e.target.value); setNote('') }} className={field} />
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="submit" className="btn btn-primary">Save</button>
+          {note && <span className="text-sm text-slate-500">{note}</span>}
+        </div>
+      </form>
+    </section>
   )
 }
 

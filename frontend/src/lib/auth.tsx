@@ -10,10 +10,11 @@ interface Auth {
   me: Me | null
   status: Status
   signOut: () => Promise<void>
+  setMe: (me: Me) => void          // after changing your settings
 }
 
 const AuthContext = createContext<Auth>({
-  me: null, status: 'loading', signOut: async () => {},
+  me: null, status: 'loading', signOut: async () => {}, setMe: () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,7 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signed-out')
   }, [])
 
-  return <AuthContext.Provider value={{ me, status, signOut }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ me, status, signOut, setMe }}>{children}</AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => useContext(AuthContext)

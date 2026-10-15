@@ -2,17 +2,21 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { TemplateSummary } from '../lib/types'
 
 export default function Drills() {
   const [rows, setRows] = useState<TemplateSummary[]>([])
   const [error, setError] = useState('')
+  const { me } = useAuth()
 
   useEffect(() => { api.templates().then(setRows).catch((e) => setError(e.message)) }, [])
 
   if (error) return <p className="card text-red-600">{error}</p>
 
-  const today = new Date().toISOString().slice(0, 10)
+  // Your study day from the server, in your time zone. The browser's toISOString() is the
+  // UTC date, which is already tomorrow on an evening west of Greenwich.
+  const today = me?.today ?? new Date().toLocaleDateString('en-CA')
   const due = rows.filter((r) => r.state?.due && r.state.due <= today)
 
   return (

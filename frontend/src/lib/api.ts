@@ -50,6 +50,10 @@ export const api = {
   health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string }>('/health'),
   me: () => request<Me>('/auth/me'),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  // null puts a setting back to the server's default
+  updateMe: (body: { timezone?: string | null; daily_review_cap?: number | null;
+                     daily_new_cap?: number | null }) =>
+    request<Me>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
 
   // --- daily queue and attempts ---
   today: (opts?: { review_cap?: number; new_cap?: number; shuffle?: number; skip?: number[] }) =>
