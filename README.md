@@ -1,6 +1,6 @@
-# LeetCode Tracker
+# Coding Tracker
 
-[![CI](https://github.com/capy-zhiao/leetcode-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/capy-zhiao/leetcode-tracker/actions/workflows/ci.yml)
+[![CI](https://github.com/capy-zhiao/coding-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/capy-zhiao/coding-tracker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![React](https://img.shields.io/badge/react-18-61dafb)
 

@@ -72,7 +72,7 @@ async def lifespan(_: FastAPI):
 # starts (start.sh and the Docker entrypoint both call it).
 app = FastAPI(
     lifespan=lifespan,
-    title="LeetCode Tracker API",
+    title="Coding Tracker API",
     description="Spaced-repetition tracker for the NeetCode 250",
     version="1.0.0",
 )

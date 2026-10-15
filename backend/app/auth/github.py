@@ -47,7 +47,7 @@ def fetch_user(token: str) -> dict:
     r = httpx.get(USER_URL, timeout=10, headers={
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "User-Agent": "leetcode-tracker",
+        "User-Agent": "coding-tracker",
     })
     if r.status_code != 200:
         raise GitHubError(f"profile request failed ({r.status_code})")

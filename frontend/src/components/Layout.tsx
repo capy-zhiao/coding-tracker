@@ -32,7 +32,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-screen">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <nav className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-1">
-          <span className="font-semibold mr-4">🧠 LeetCode Tracker</span>
+          <span className="font-semibold mr-4">🧠 Coding Tracker</span>
           {links.map((l) => (
             <NavLink
               key={l.to}

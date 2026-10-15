@@ -15,7 +15,7 @@ x-logging: &logging
 services:
   web:
     build: frontend
-    image: ghcr.io/capy-zhiao/leetcode-tracker-web:${TAG:-latest}
+    image: ghcr.io/capy-zhiao/coding-tracker-web:${TAG:-latest}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -34,7 +34,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: ghcr.io/capy-zhiao/leetcode-tracker-api:${TAG:-latest}
+    image: ghcr.io/capy-zhiao/coding-tracker-api:${TAG:-latest}
     env_file:
       - path: .env
         required: false
@@ -73,7 +73,7 @@ services:
 
   backup:
     build: deploy/backup
-    image: ghcr.io/capy-zhiao/leetcode-tracker-backup:${TAG:-latest}
+    image: ghcr.io/capy-zhiao/coding-tracker-backup:${TAG:-latest}
     env_file:
       - path: backup.env
         required: false

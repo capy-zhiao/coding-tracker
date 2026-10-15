@@ -12,8 +12,8 @@ pg_dump --format=custom --no-owner --file="$file"
 echo "$(date -u +%FT%TZ) dumped $(du -h "$file" | cut -f1) to $file"
 
 if [ -n "${BACKUP_BUCKET:-}" ]; then
-  aws s3 cp "$file" "s3://$BACKUP_BUCKET/leetcode-tracker/$(basename "$file")" --only-show-errors
-  echo "copied to s3://$BACKUP_BUCKET/leetcode-tracker/"
+  aws s3 cp "$file" "s3://$BACKUP_BUCKET/coding-tracker/$(basename "$file")" --only-show-errors
+  echo "copied to s3://$BACKUP_BUCKET/coding-tracker/"
 fi
 
 ls -1t /backups/tracker-*.dump | tail -n +4 | xargs -r rm -f

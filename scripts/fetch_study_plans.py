@@ -29,7 +29,7 @@ def fetch(slug: str) -> dict:
         headers={"Content-Type": "application/json",
                  "Referer": f"https://leetcode.com/studyplan/{slug}/",
                  # LeetCode answers 403 to urllib's default "Python-urllib/x.y" agent
-                 "User-Agent": "Mozilla/5.0 (leetcode-tracker study-plan fetch)"},
+                 "User-Agent": "Mozilla/5.0 (coding-tracker study-plan fetch)"},
     )
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)["data"]["studyPlanV2Detail"]

@@ -30,7 +30,7 @@ the instance in the same one.
 
 1. S3 → Create bucket, e.g. `zhiaowei-leetcode-backups`. Keep "Block all public access"
    on.
-2. Management → Create lifecycle rule: prefix `leetcode-tracker/`, expire current
+2. Management → Create lifecycle rule: prefix `coding-tracker/`, expire current
    versions after **14 days**.
 3. IAM → Users → Create user `leetcode-backup`, no console access. Add this inline
    policy (it can add backups and nothing else, not even delete them; the lifecycle rule
@@ -42,7 +42,7 @@ the instance in the same one.
      "Statement": [{
        "Effect": "Allow",
        "Action": "s3:PutObject",
-       "Resource": "arn:aws:s3:::zhiaowei-leetcode-backups/leetcode-tracker/*"
+       "Resource": "arn:aws:s3:::zhiaowei-leetcode-backups/coding-tracker/*"
      }]
    }
    ```
@@ -94,8 +94,8 @@ sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
-sudo git clone https://github.com/capy-zhiao/leetcode-tracker.git /opt/leetcode-tracker
-sudo chown -R ubuntu: /opt/leetcode-tracker && cd /opt/leetcode-tracker
+sudo git clone https://github.com/capy-zhiao/coding-tracker.git /opt/coding-tracker
+sudo chown -R ubuntu: /opt/coding-tracker && cd /opt/coding-tracker
 cp .env.example .env && cp backup.env.example backup.env && chmod 600 .env backup.env
 ```
 
@@ -130,7 +130,7 @@ docker compose logs -f web            # watch Caddy obtain the certificate
 - `https://leetcode.zhiaowei.dev` opens with a valid certificate
 - Sign in with GitHub; "Try the demo" works in a private window
 - `docker compose exec backup backup.sh`, then the file shows up in the bucket under
-  `leetcode-tracker/`
+  `coding-tracker/`
 
 ## 8. Bring your own history
 
@@ -138,7 +138,7 @@ Sign in on the server once, so your account exists. Then, from your machine:
 
 ```bash
 cd backend && ./.venv/bin/python -m app.tools export --login local > history.json
-scp -i leetcode.pem history.json ubuntu@<elastic-ip>:/opt/leetcode-tracker/
+scp -i leetcode.pem history.json ubuntu@<elastic-ip>:/opt/coding-tracker/
 ```
 
 and on the server:
@@ -153,7 +153,7 @@ docker compose exec api python -m app.tools import --login capy-zhiao /tmp/histo
 By hand, building on the server:
 
 ```bash
-cd /opt/leetcode-tracker && git pull && docker compose up -d --build
+cd /opt/coding-tracker && git pull && docker compose up -d --build
 ```
 
 The API runs any new migrations as it starts. Once automatic deploys are set up (next
@@ -171,7 +171,7 @@ for GitHub's runners and GitHub stores no AWS keys. Each run signs in to AWS wit
 OIDC token as a role that can only send commands to this one instance.
 
 1. **The packages.** After the first run of the workflow, open each package on GitHub
-   (profile → Packages → `leetcode-tracker-api`, `-web`, `-backup`) → Package settings →
+   (profile → Packages → `coding-tracker-api`, `-web`, `-backup`) → Package settings →
    Change visibility → Public, so the server can pull without a token. The code is
    public anyway.
 2. **Let SSM manage the instance.** IAM → Roles → Create role → AWS service, EC2 → attach
@@ -194,7 +194,7 @@ OIDC token as a role that can only send commands to this one instance.
        "Condition": {
          "StringEquals": {
            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-           "token.actions.githubusercontent.com:sub": "repo:capy-zhiao/leetcode-tracker:ref:refs/heads/main"
+           "token.actions.githubusercontent.com:sub": "repo:capy-zhiao/coding-tracker:ref:refs/heads/main"
          }
        }
      }]
@@ -235,7 +235,7 @@ you, when the site doesn't answer.
 ```bash
 docker compose exec backup ls /backups                       # the last three
 # or fetch an older one from S3 into the volume:
-aws s3 cp s3://<bucket>/leetcode-tracker/<file> . && docker compose cp <file> backup:/backups/
+aws s3 cp s3://<bucket>/coding-tracker/<file> . && docker compose cp <file> backup:/backups/
 
 docker compose stop api
 docker compose exec backup sh -c \

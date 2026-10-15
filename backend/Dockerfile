@@ -1,6 +1,6 @@
 # Backend image: FastAPI + SQLite. Build from the repository root, because seed_db.py
 # reads the problem lists in data/:
-#   docker build -f backend/Dockerfile -t leetcode-tracker-backend .
+#   docker build -f backend/Dockerfile -t coding-tracker-backend .
 # docker-compose.yml at the root does this for you.
 FROM python:3.12-slim
 

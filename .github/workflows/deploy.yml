@@ -64,8 +64,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/capy-zhiao/leetcode-tracker-${{ matrix.image }}:${{ steps.tag.outputs.short }}
-            ghcr.io/capy-zhiao/leetcode-tracker-${{ matrix.image }}:latest
+            ghcr.io/capy-zhiao/coding-tracker-${{ matrix.image }}:${{ steps.tag.outputs.short }}
+            ghcr.io/capy-zhiao/coding-tracker-${{ matrix.image }}:latest
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
@@ -88,7 +88,7 @@ jobs:
 
       - name: Check out the commit on the server and start its images
         run: |
-          app=/opt/leetcode-tracker
+          app=/opt/coding-tracker
           as_owner="runuser -u ubuntu --"
           script="cd $app && $as_owner git fetch -q origin && $as_owner git checkout -q --detach $SHA && $as_owner sh deploy/update.sh"
           id=$(aws ssm send-command --instance-ids "$INSTANCE" \

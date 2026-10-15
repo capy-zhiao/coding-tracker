@@ -26,7 +26,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="card w-full max-w-sm text-center space-y-4 py-8">
         <div className="text-3xl">🧠</div>
-        <h1 className="text-xl font-semibold">LeetCode Tracker</h1>
+        <h1 className="text-xl font-semibold">Coding Tracker</h1>
         <p className="text-sm text-slate-500">
           Spaced repetition for NeetCode 150, Top Interview 150 and LeetCode 75: what to
           practise each day, when to review it, and whether your big-O was right.

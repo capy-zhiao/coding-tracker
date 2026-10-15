@@ -28,7 +28,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "🧠 LeetCode Tracker"
+echo "🧠 Coding Tracker"
 echo "─────────────────────────────"
 
 # ---------- dependency check (auto-installs on a fresh machine) ----------
