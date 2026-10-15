@@ -11,6 +11,23 @@ from pydantic import BaseModel, ConfigDict, Field
 from .srs import Difficulty, Grade
 
 
+class MeOut(BaseModel):
+    """The signed-in user, plus what the frontend needs to know about this deployment."""
+    id: int
+    login: str
+    display_name: str
+    avatar_url: str
+    provider: str
+    is_owner: bool
+    is_demo: bool
+    ai_enabled: bool
+    timezone: str | None
+    daily_review_cap: int
+    daily_new_cap: int
+    auth_mode: str
+    today: date         # the user's study day; the browser's own date can differ
+
+
 class StateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     interval_days: int

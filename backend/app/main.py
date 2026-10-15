@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import llm
 from .config import settings
-from .deps import require_api_key
-from .routers import mock, problems, review, stats, templates
+from .deps import get_current_user
+from .routers import auth, mock, problems, review, stats, templates
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,11 +37,14 @@ app.add_middleware(
 def health():
     return {
         "status": "ok",
+        "auth_mode": settings.auth_mode,
         "llm_enabled": llm.is_enabled(),
         "llm_provider": llm.provider_name(),
         "daily_caps": {"review": settings.daily_review_cap, "new": settings.daily_new_cap},
     }
 
 
+# Every route except /health needs a user; in local mode that is the one local user.
+app.include_router(auth.router)
 for r in (problems.router, review.router, stats.router, mock.router, templates.router):
-    app.include_router(r, dependencies=[Depends(require_api_key)])
+    app.include_router(r, dependencies=[Depends(get_current_user)])

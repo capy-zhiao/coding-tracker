@@ -4,12 +4,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from .. import llm
 from ..complexity import COMPLEXITY_CHOICES, EXPECTED, check as check_complexity
 from ..database import get_db
-from ..deps import ensure_state, get_problem, today as get_today
-from ..models import Attempt, Problem
+from ..deps import effective_caps, ensure_state, get_current_user, get_problem, user_today
+from ..models import Attempt, Problem, User
 from ..schemas import (
     AttemptIn, AttemptOut, AttemptResult, ComplexityCheck, DailyQueueOut,
     GradeSuggestion, StateOut,
@@ -23,26 +22,31 @@ router = APIRouter(prefix="/review", tags=["review"])
 @router.get("/today", response_model=DailyQueueOut)
 def today_queue(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
     review_cap: int | None = Query(None, ge=0, le=50),
     new_cap: int | None = Query(None, ge=0, le=50),
     shuffle: int | None = Query(None, description="seed: pick reviews at random instead of by priority"),
     skip: list[int] = Query([], description="problem ids to put last in the review pick"),
 ):
     """What to work on today — this powers the home screen."""
-    d = get_today()
+    d = user_today(user)
+    review_cap, new_cap = effective_caps(user, review_cap, new_cap)
     q = build_today(db, d, review_cap, new_cap, shuffle, skip)
     return DailyQueueOut(
         date=d,
         reviews=q.reviews, new_problems=q.new_problems, templates=q.templates,
-        total_due=q.total_due, deferred=q.deferred,
-        review_cap=review_cap if review_cap is not None else settings.daily_review_cap,
+        total_due=q.total_due, deferred=q.deferred, review_cap=review_cap,
     )
 
 
 @router.get("/forecast")
-def review_forecast(db: Session = Depends(get_db), days: int = Query(14, ge=1, le=60)):
+def review_forecast(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    days: int = Query(14, ge=1, le=60),
+):
     """Upcoming review load, rendered as a bar chart in the UI."""
-    return forecast(db, get_today(), days)
+    return forecast(db, user_today(user), days)
 
 
 @router.get("/suggest-grade", response_model=GradeSuggestion)
@@ -69,9 +73,10 @@ def submit_attempt(
     payload: AttemptIn,
     problem: Problem = Depends(get_problem),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Record an attempt and let SRS compute the next review date."""
-    d = get_today()
+    d = user_today(user)
     st = ensure_state(db, problem)
 
     # 1. Store this attempt

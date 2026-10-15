@@ -1,21 +1,20 @@
 // Single place every network call goes through, so error handling lives in one spot and
-// swapping the base URL or adding an API key is a one-file change.
+// swapping the base URL is a one-file change. Requests are same-origin (the dev proxy
+// locally, Caddy in production), so a session cookie rides along without any CORS setup.
 import type {
   AnswerGrade, Attempt, AttemptIn, AttemptResult, BlindWriteResult, Credit,
-  ComplexityStats, DailyQueue, FollowUp, InterviewQuestion, MockStart,
+  ComplexityStats, DailyQueue, FollowUp, InterviewQuestion, Me, MockStart,
   PatternStat, Problem, ProblemDetail, Stats, TemplateSummary,
 } from './types'
 
 // vite.config.ts proxies /api/* to http://localhost:8000/* during development
 const BASE = '/api'
-const API_KEY = import.meta.env.VITE_API_KEY ?? ''
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
       ...init?.headers,
     },
   })
@@ -38,6 +37,7 @@ const qs = (params: Record<string, unknown>) => {
 
 export const api = {
   health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string }>('/health'),
+  me: () => request<Me>('/auth/me'),
 
   // --- daily queue and attempts ---
   today: (opts?: { review_cap?: number; new_cap?: number; shuffle?: number; skip?: number[] }) =>

@@ -4,6 +4,23 @@
 export type Grade = 'again' | 'hard' | 'good' | 'easy'
 export type Difficulty = 'Easy' | 'Medium' | 'Hard'
 
+/** The signed-in user (in local mode, the one local user) and deployment facts. */
+export interface Me {
+  id: number
+  login: string
+  display_name: string
+  avatar_url: string
+  provider: 'local' | 'github' | 'demo'
+  is_owner: boolean
+  is_demo: boolean
+  ai_enabled: boolean
+  timezone: string | null
+  daily_review_cap: number
+  daily_new_cap: number
+  auth_mode: 'local' | 'github'
+  today: string
+}
+
 export interface ReviewStateT {
   interval_days: number
   ease: number

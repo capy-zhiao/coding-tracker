@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     # not towards tomorrow. Set e.g. TIMEZONE=America/Toronto to pin it.
     timezone: str = ""
 
-    api_key: str = ""                 # empty = no auth (local dev)
+    # "local": no login; everything belongs to one automatically created user. This is
+    # the default and what start.sh runs. "github": sign in with GitHub, one account each.
+    auth_mode: str = "local"
+
     daily_review_cap: int = 4         # max reviews per day
     daily_new_cap: int = 3            # max new problems per day
     # Interleaving: at most this many reviews per chapter / per primary pattern each day.

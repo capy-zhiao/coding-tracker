@@ -6,10 +6,6 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# VITE_API_KEY ends up in the JavaScript bundle, so anyone who can load the page can read
-# it. Leave it empty unless the backend's API_KEY is meant as a shared access token.
-ARG VITE_API_KEY=
-ENV VITE_API_KEY=$VITE_API_KEY
 RUN npm run build
 
 FROM nginx:1.27-alpine

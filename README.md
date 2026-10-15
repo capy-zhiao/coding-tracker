@@ -167,8 +167,7 @@ docker compose down -v                                           # stop AND dele
 
 Settings come from `.env` (see `.env.example`). Containers run in UTC, so set `TIMEZONE`,
 or an evening session is filed under the next day. API keys are read at run time and are
-never built into the images. The one exception is `VITE_API_KEY`, which is compiled into
-the frontend's JavaScript; see the deployment notes before using it.
+never built into the images.
 
 ## AI setup
 
@@ -236,8 +235,8 @@ The Docker setup above, tested locally, runs unchanged on a single Linux server:
 1. Launch an instance with a recent Ubuntu or Amazon Linux. A small instance is enough
    (the backend is one process with SQLite). EC2 is billed while the instance runs.
 2. In the security group, allow SSH only from your own IP. Don't open the web port to
-   everyone: the app has no user accounts, and `API_KEY` only helps against people who
-   can't read the page's JavaScript.
+   everyone: in the default local mode there is no login, so anyone who can reach it is
+   using your data.
 3. Install Docker Engine and the Compose plugin, clone this repository, then
    `cp .env.example .env`, set `TIMEZONE`, and run `docker compose up -d --build`.
 4. Reach it through an SSH tunnel, `ssh -L 8080:localhost:8080 <user>@<instance>`, then
@@ -251,5 +250,5 @@ The frontend calls `/api` on its own origin, and `frontend/vercel.json` currentl
 every path to `index.html`, so a Vercel frontend can't reach a backend elsewhere until
 `vercel.json` also rewrites `/api/(.*)` to the backend's URL. The `Procfile` only starts
 the server: run `python seed_db.py` once against the production database to load the
-problems, and install `psycopg[binary]` for Postgres. If it's public, set `API_KEY` on the
-backend and the same value as `VITE_API_KEY` on the frontend.
+problems, and install `psycopg[binary]` for Postgres. Don't make it public while it runs
+in local mode, which has no login.

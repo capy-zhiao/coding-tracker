@@ -1,7 +1,7 @@
 """Database tables (SQLAlchemy 2.0 style).
 
-Three core tables:
-  Problem     — static information for the 250 problems
+  User        — who is practising; local mode has exactly one
+  Problem     — static information for the problems and templates
   ReviewState — SRS state per problem (1:1); the persisted form of srs.SrsState
   Attempt     — one row per attempt (1:N); powers stats, code diffs and complexity accuracy
   FollowUp    — cached interviewer follow-up questions (1:N)
@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -19,6 +21,33 @@ from .srs import DEFAULT_EASE, SrsState
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class User(Base):
+    """Someone practising. Local mode has exactly one (provider "local"), created on the
+    first request; cloud mode adds one per GitHub account, plus a shared demo account.
+
+    The nullable settings override the matching .env values for this user only.
+    """
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("provider", "provider_id", name="uq_users_provider"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16))             # local | github | demo
+    provider_id: Mapped[str] = mapped_column(String(64))          # e.g. the GitHub user id
+    login: Mapped[str] = mapped_column(String(100), index=True)
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    avatar_url: Mapped[str] = mapped_column(String(300), default="")
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_daily_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    daily_review_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    daily_new_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    demo_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Problem(Base):

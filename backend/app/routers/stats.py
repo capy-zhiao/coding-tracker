@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 from .. import credit, llm
 from ..complexity import EXPECTED, check as check_complexity
 from ..database import get_db
-from ..deps import local_date, today as get_today
-from ..models import Attempt, Problem
+from ..deps import get_current_user, local_date, user_today
+from ..models import Attempt, Problem, User
 from ..patterns import PATTERN_TEMPLATE, PATTERNS, describe, label, patterns_for
 from ..schemas import ChapterStat, ComplexityStat, PatternStat, StatsOut
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 MASTERED_INTERVAL = 21   # an interval of 21+ days counts as "mastered"
 
 
-def _streak(db: Session) -> int:
+def _streak(db: Session, user: User) -> int:
     """Consecutive days with at least one attempt, counting back from today.
 
     Grouping happens in Python rather than with SQL's date(), because created_at is stored
@@ -27,12 +27,12 @@ def _streak(db: Session) -> int:
     silently break the streak.
     """
     days = {
-        local_date(a.created_at).isoformat()
+        local_date(a.created_at, user.timezone).isoformat()
         for a in db.scalars(select(Attempt))
     }
     if not days:
         return 0
-    cur = get_today()
+    cur = user_today(user)
     if cur.isoformat() not in days:
         cur = cur - timedelta(days=1)      # nothing today yet, so start from yesterday
         if cur.isoformat() not in days:
@@ -45,8 +45,8 @@ def _streak(db: Session) -> int:
 
 
 @router.get("", response_model=StatsOut)
-def overview(db: Session = Depends(get_db)):
-    d = get_today()
+def overview(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    d = user_today(user)
     problems = list(db.scalars(
         select(Problem).options(selectinload(Problem.state)).where(Problem.kind == "problem")
     ))
@@ -57,7 +57,7 @@ def overview(db: Session = Depends(get_db)):
 
     attempts = list(db.scalars(select(Attempt)))
     week_ago = d - timedelta(days=7)
-    attempts_7d = sum(1 for a in attempts if local_date(a.created_at) >= week_ago)
+    attempts_7d = sum(1 for a in attempts if local_date(a.created_at, user.timezone) >= week_ago)
     timed = [a.seconds for a in attempts if a.seconds > 0]
 
     by_chapter: list[ChapterStat] = []
@@ -72,19 +72,21 @@ def overview(db: Session = Depends(get_db)):
     return StatsOut(
         total_problems=len(problems), started=started, mastered=mastered,
         due_today=due_today, attempts_total=len(attempts), attempts_7d=attempts_7d,
-        streak_days=_streak(db),
+        streak_days=_streak(db, user),
         avg_seconds=int(sum(timed) / len(timed)) if timed else 0,
         by_chapter=by_chapter,
     )
 
 
 @router.get("/heatmap")
-def heatmap(db: Session = Depends(get_db), days: int = 90):
+def heatmap(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user), days: int = 90,
+):
     """Attempts per day for the last N days — a GitHub-style contribution grid."""
-    start = get_today() - timedelta(days=days)
+    start = user_today(user) - timedelta(days=days)
     counter: Counter[str] = Counter()
     for a in db.scalars(select(Attempt)):
-        day = local_date(a.created_at)
+        day = local_date(a.created_at, user.timezone)
         if day >= start:
             counter[day.isoformat()] += 1
     return [{"date": k, "count": v} for k, v in sorted(counter.items())]
