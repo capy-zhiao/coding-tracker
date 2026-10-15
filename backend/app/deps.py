@@ -26,7 +26,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """
     if settings.auth_mode == "local":
         return local_user(db)
-    _refuse_cross_site_writes(request)
+    refuse_cross_site_writes(request)
     uid = read_session(request)
     user = db.get(User, uid) if uid is not None else None
     if user is None:
@@ -42,7 +42,7 @@ def _origin(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def _refuse_cross_site_writes(request: Request) -> None:
+def refuse_cross_site_writes(request: Request) -> None:
     """CSRF guard for cookie sessions. SameSite=Lax already keeps the cookie off cross-site
     POSTs; this is the second lock: a state-changing request whose Origin isn't this site
     is refused. Browsers send Origin on every POST, so a request without one isn't a

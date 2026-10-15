@@ -47,9 +47,11 @@ const qs = (params: Record<string, unknown>) => {
 }
 
 export const api = {
-  health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string }>('/health'),
+  health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string;
+                          demo: boolean }>('/health'),
   me: () => request<Me>('/auth/me'),
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  demo: () => request<Me>('/auth/demo', { method: 'POST' }),
   // null puts a setting back to the server's default
   updateMe: (body: { timezone?: string | null; daily_review_cap?: number | null;
                      daily_new_cap?: number | null }) =>

@@ -80,6 +80,14 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
         </nav>
       </header>
+      {me?.is_demo && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 text-sm">
+          <p className="max-w-4xl mx-auto px-4 py-2">
+            You're in the shared demo account: other visitors see the same data, and it's
+            rebuilt every day. Sign in with GitHub to keep your own.
+          </p>
+        </div>
+      )}
       <main className="max-w-4xl mx-auto px-4 py-6">{children}</main>
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
     </div>

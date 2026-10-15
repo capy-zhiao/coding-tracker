@@ -3,13 +3,15 @@
 Once running, http://localhost:8000/docs serves interactive OpenAPI documentation —
 generated automatically by FastAPI from the type hints.
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import llm
+from . import demo, llm
 from .config import settings
 from .deps import get_current_user
 from .routers import auth, mock, problems, review, stats, templates
@@ -29,10 +31,41 @@ def check_auth_settings() -> None:
             raise RuntimeError("github mode needs GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET")
 
 
+def reset_demo_if_stale() -> None:
+    from sqlalchemy import select
+
+    from .database import SessionLocal
+    from .deps import today
+    from .models import User
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.provider == "demo"))
+        if demo.needs_reset(user, datetime.now(timezone.utc).replace(tzinfo=None)):
+            demo.reset_demo(db, today())
+            logging.getLogger(__name__).info("Demo account rebuilt")
+
+
+async def run_demo_resets() -> None:
+    """Rebuild the shared demo account once it's a day old; checked hourly. In-process
+    rather than a cron container: one less moving part, and a single uvicorn worker means
+    it only ever runs once."""
+    while True:
+        try:
+            await asyncio.to_thread(reset_demo_if_stale)
+        except Exception:                    # keep the loop alive; the next hour retries
+            logging.getLogger(__name__).exception("Demo reset failed")
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     check_auth_settings()
+    task = None
+    if settings.auth_mode == "github" and settings.demo_enabled:
+        task = asyncio.create_task(run_demo_resets())
     yield
+    if task is not None:
+        task.cancel()
 
 
 # The schema is not created here: migrate.py runs the Alembic migrations before the app
@@ -58,6 +91,7 @@ def health():
     return {
         "status": "ok",
         "auth_mode": settings.auth_mode,
+        "demo": settings.auth_mode == "github" and settings.demo_enabled,
         "llm_enabled": llm.is_enabled(),
         "llm_provider": llm.provider_name(),
         "daily_caps": {"review": settings.daily_review_cap, "new": settings.daily_new_cap},

@@ -11,12 +11,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import llm
+from .. import demo, llm
 from ..auth import github
 from ..auth.session import STATE_COOKIE, clear_session, secure_cookies, set_session
 from ..config import settings
 from ..database import get_db
-from ..deps import effective_caps, get_current_user, user_today
+from ..deps import effective_caps, get_current_user, refuse_cross_site_writes, today, user_today
 from ..models import User
 from ..schemas import MeIn, MeOut
 
@@ -127,6 +127,22 @@ def _upsert_github_user(db: Session, profile: dict) -> User:
     user.ai_enabled = user.is_owner      # the server's own LLM key is the owner's
     db.commit()
     return user
+
+
+@router.post("/demo", response_model=MeOut)
+def sign_in_demo(request: Request, db: Session = Depends(get_db)):
+    """Sign into the shared demo account, rebuilding it first if it's a day old."""
+    _require_github_mode()
+    if not settings.demo_enabled:
+        raise HTTPException(404, "The demo is off on this server")
+    refuse_cross_site_writes(request)
+    user = demo.demo_user(db)
+    if demo.needs_reset(user, datetime.now(timezone.utc).replace(tzinfo=None)):
+        demo.reset_demo(db, today())
+    response_body = me(user)
+    response = Response(content=response_body.model_dump_json(), media_type="application/json")
+    set_session(response, user.id)
+    return response
 
 
 @router.post("/logout", status_code=204)

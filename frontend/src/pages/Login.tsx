@@ -1,7 +1,26 @@
 // Sign-in page, shown only when the server runs in github mode and nobody is signed in.
 // Local mode never gets here: /auth/me always answers with the local user.
+import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
+
 export default function Login() {
   const failed = new URLSearchParams(window.location.search).get('signin') === 'failed'
+  const [demo, setDemo] = useState(false)
+  const [entering, setEntering] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => { api.health().then((h) => setDemo(h.demo)).catch(() => {}) }, [])
+
+  const tryDemo = async () => {
+    setEntering(true)
+    try {
+      await api.demo()
+      window.location.assign('/')         // the session cookie is set; start the app fresh
+    } catch (e) {
+      setError((e as Error).message)
+      setEntering(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -21,6 +40,12 @@ export default function Login() {
           <GitHubMark />
           Sign in with GitHub
         </a>
+        {demo && (
+          <button onClick={tryDemo} disabled={entering} className="btn w-full">
+            {entering ? 'Opening the demo…' : 'Try the demo, no account needed'}
+          </button>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <p className="text-xs text-slate-400">
           Only your public GitHub profile is read: username, name and avatar.
         </p>

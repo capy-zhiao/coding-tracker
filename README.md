@@ -146,6 +146,19 @@ only the public GitHub profile is read and the GitHub token isn't kept. The sett
 listed in `backend/.env.example`. To try it locally, create a GitHub OAuth app with the
 callback `http://localhost:5173/api/auth/callback/github`.
 
+`DEMO_ENABLED=true` adds a "Try the demo" button for people without a GitHub account. It
+signs into one shared account with six weeks of generated history (the real scheduling
+rules run on a fixed random seed), rebuilt every day.
+
+To move a history between accounts or databases, for example your local one into your
+GitHub account on a server:
+
+```bash
+cd backend
+./.venv/bin/python -m app.tools export --login local > history.json
+./.venv/bin/python -m app.tools import --login your-github-login history.json
+```
+
 ### With Docker
 
 Needs Docker with Compose v2.24 or newer.

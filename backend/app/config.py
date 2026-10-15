@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     github_client_secret: str = ""
     # This GitHub account is the owner: it uses the server's LLM key and sees its credit.
     owner_github_login: str = ""
+    # github mode only: a "Try the demo" button that signs into a shared account with
+    # generated history, rebuilt every 24 hours (app/demo.py).
+    demo_enabled: bool = False
 
     daily_review_cap: int = 4         # max reviews per day
     daily_new_cap: int = 3            # max new problems per day
