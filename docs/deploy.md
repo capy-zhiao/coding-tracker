@@ -180,9 +180,14 @@ OIDC token as a role that can only send commands to this one instance.
    after a few minutes the instance shows up under Systems Manager → Fleet Manager.
 3. **Trust GitHub.** IAM → Identity providers → Add provider → OpenID Connect, provider
    URL `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
-4. **The deploy role.** IAM → Roles → Create role → Web identity → that provider,
-   audience `sts.amazonaws.com`. Replace its trust policy with this one, which only lets
-   main of this repository assume it:
+4. **The deploy role.** IAM → Roles → Create role → Custom trust policy, with this one,
+   which only lets main of this repository assume it. GitHub's token names the
+   repository as `owner@<owner-id>/repo@<repo-id>`, so a renamed repository, or someone
+   else's taking the old name, doesn't match. Look the two ids up with:
+
+   ```bash
+   curl -s https://api.github.com/repos/capy-zhiao/coding-tracker | jq '.owner.id, .id'
+   ```
 
    ```json
    {
@@ -194,7 +199,7 @@ OIDC token as a role that can only send commands to this one instance.
        "Condition": {
          "StringEquals": {
            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-           "token.actions.githubusercontent.com:sub": "repo:capy-zhiao/coding-tracker:ref:refs/heads/main"
+           "token.actions.githubusercontent.com:sub": "repo:capy-zhiao@<owner-id>/coding-tracker@<repo-id>:ref:refs/heads/main"
          }
        }
      }]
@@ -251,3 +256,4 @@ docker compose start api
 | Page loads, every request fails with 502 | `docker compose logs api`: a missing setting stops it at startup |
 | Sign-in comes back to "didn't complete" | `docker compose logs api` for the reason; the callback URL in the OAuth app must match `PUBLIC_BASE_URL` exactly |
 | Out of memory | `free -h`; the swap from step 6 |
+| Deploy fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity" | CloudTrail → Event history → `AssumeRoleWithWebIdentity`: the event's `userName` is the `sub` GitHub sent; the trust policy must match it exactly |
