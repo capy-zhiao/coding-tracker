@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from .. import llm
 from ..database import get_db
-from ..deps import get_current_user, get_problem, states_for
+from ..deps import get_current_user, get_problem, notes_for, states_for
 from ..models import FollowUp, InterviewQA, Problem, User
 from ..schemas import (
     AnswerGradeOut, AnswerIn, FollowUpOut, InterviewQuestionOut,
@@ -61,7 +61,7 @@ def start_mock(
 
     p = random.choice(pool)
     return MockStartOut(
-        problem=ProblemDetail.of(p, states.get(p.id)),
+        problem=ProblemDetail.of(p, states.get(p.id), notes_for(db, user.id, p.id)),
         minutes=DEFAULT_MINUTES.get(p.difficulty, 35),
         followups_ready=bool(p.followups) or llm.is_enabled(),
     )

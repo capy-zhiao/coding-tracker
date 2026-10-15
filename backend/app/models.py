@@ -2,6 +2,7 @@
 
   User        — who is practising; local mode has exactly one
   Problem     — static information for the problems and templates, shared by everyone
+  ProblemNote — a user's own notes and latest solution for a problem
   ReviewState — SRS state per (user, problem); the persisted form of srs.SrsState
   Attempt     — one row per attempt; powers stats, code diffs and complexity accuracy
   FollowUp    — cached interviewer follow-up questions per problem, shared
@@ -69,8 +70,6 @@ class Problem(Base):
     in_top150: Mapped[bool] = mapped_column(Boolean, default=False)   # LeetCode Top Interview 150
     in_lc75: Mapped[bool] = mapped_column(Boolean, default=False)     # LeetCode 75
     kind: Mapped[str] = mapped_column(String(20), default="problem")  # problem | template
-    notes: Mapped[str] = mapped_column(Text, default="")         # migrated from markdown notes
-    code: Mapped[str] = mapped_column(Text, default="")          # most recent accepted solution
     # Algorithm patterns (see patterns.py). Cuts across chapters: 239 sits in the Sliding
     # Window chapter but is really a monotonic deque.
     patterns: Mapped[list] = mapped_column(JSON, default=list)
@@ -78,6 +77,19 @@ class Problem(Base):
     followups: Mapped[list["FollowUp"]] = relationship(
         back_populates="problem", cascade="all, delete-orphan"
     )
+
+
+class ProblemNote(Base):
+    """One user's notes and most recent solution for one problem. The local user's first
+    ones come from the NeetCode notes (personal_seed.py); submitting code updates `code`."""
+    __tablename__ = "problem_notes"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), primary_key=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    code: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class ReviewState(Base):

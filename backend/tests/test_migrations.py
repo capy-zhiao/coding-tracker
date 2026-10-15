@@ -106,6 +106,10 @@ def test_existing_rows_are_given_to_the_local_user(tmp_path):
     assert (provider, provider_id, is_owner) == ("local", "local", 1)
     assert con.execute("SELECT user_id FROM review_states").fetchall() == [(uid,)]
     assert con.execute("SELECT user_id FROM attempts").fetchall() == [(uid,)]
+    # Notes and code moved off the shared problems table, to the same user
+    assert con.execute("SELECT user_id, notes, code FROM problem_notes").fetchall() == [
+        (uid, "my notes", "def twoSum(): ...")]
+    assert "notes" not in {r[1] for r in con.execute("PRAGMA table_info(problems)")}
     con.close()
 
 
@@ -119,6 +123,8 @@ def test_ownership_can_be_rolled_back_without_losing_the_local_users_rows(tmp_pa
     con = sqlite3.connect(tmp_path / "tracker.db")
     assert con.execute("SELECT count(*) FROM review_states").fetchone() == (1,)
     assert con.execute("SELECT count(*) FROM attempts").fetchone() == (1,)
+    assert con.execute("SELECT notes, code FROM problems").fetchone() == (
+        "my notes", "def twoSum(): ...")
     assert "user_id" not in {r[1] for r in con.execute("PRAGMA table_info(attempts)")}
     con.close()
     command.upgrade(cfg, "head")                 # and forward again

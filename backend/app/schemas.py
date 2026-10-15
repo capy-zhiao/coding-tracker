@@ -64,8 +64,15 @@ class ProblemOut(BaseModel):
 
 
 class ProblemDetail(ProblemOut):
-    notes: str = ""
+    notes: str = ""             # the current user's, from problem_notes
     code: str = ""
+
+    @classmethod
+    def of(cls, problem, state=None, note=None):
+        out = super().of(problem, state)
+        if note is not None:
+            out.notes, out.code = note.notes, note.code
+        return out
 
 
 class QueueItemOut(BaseModel):

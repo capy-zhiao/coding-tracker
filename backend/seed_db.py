@@ -73,8 +73,8 @@ def main() -> None:
     kept_with_history: list[int] = []
 
     def item_for(number: int) -> dict:
-        """One problem's fields: from the notes if it's there (keeps notes and code),
-        otherwise from its study plan. Anything in a LeetCode study plan links to LeetCode
+        """One problem's fields: from the notes if it's there, otherwise from its study
+        plan. Anything in a LeetCode study plan links to LeetCode
         (via the first plan it appears in); only NeetCode-only problems keep neetcode.io."""
         entry = plan_entry(number)
         if number in seed:
@@ -86,8 +86,7 @@ def main() -> None:
         plan, q = entry
         ch = chapter_for(number, q["group"])
         return {"number": number, "title": q["title"], "difficulty": q["difficulty"],
-                "chapter_num": ch, "chapter": CHAPTER_NAMES[ch], "url": plan.url(q["slug"]),
-                "notes": "", "code": "", "solved": False}
+                "chapter_num": ch, "chapter": CHAPTER_NAMES[ch], "url": plan.url(q["slug"])}
 
     try:
         existing = {p.number: p for p in db.scalars(select(Problem))}
@@ -102,7 +101,7 @@ def main() -> None:
                     chapter=item["chapter"], url=item["url"],
                     in_neetcode150=number in NEETCODE_150, in_top150=number in TOP_150,
                     in_lc75=number in LC_75,
-                    kind="problem", notes=item["notes"], code=item["code"],
+                    kind="problem",
                     patterns=patterns_for(number, item["chapter_num"]),
                 )
                 db.add(p)
@@ -118,10 +117,6 @@ def main() -> None:
                 p.in_neetcode150 = number in NEETCODE_150
                 p.in_top150 = number in TOP_150
                 p.in_lc75 = number in LC_75
-                if item["notes"] and not p.notes:
-                    p.notes = item["notes"]
-                if item["code"] and not p.code:
-                    p.code = item["code"]
                 updated += 1
 
         # Problems no longer in any list. Anything anyone has practised stays.
@@ -141,8 +136,7 @@ def main() -> None:
                 continue
             t = Problem(
                 number=num, title=name, difficulty=diff, chapter_num=ch_num,
-                chapter=ch, url="", in_neetcode150=False, kind="template",
-                notes="Blind-write practice", code="", patterns=[],
+                chapter=ch, url="", in_neetcode150=False, kind="template", patterns=[],
             )
             db.add(t)
             t_added += 1

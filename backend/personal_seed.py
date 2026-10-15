@@ -2,7 +2,8 @@
 
 Problems marked solved in data/seed.json start out "due today", with the failure counts
 from the old review plan, so the first daily queue picks up where the manual study plan
-left off; every template starts due too. That history is one person's, so it only goes
+left off; every template starts due too; and the notes and solutions written there become
+the local user's notes. That history is one person's, so it only goes
 to the local user: cloud accounts start from nothing.
 
 Never changes a row that already exists, so start.sh runs it on every start: a problem
@@ -20,7 +21,7 @@ from sqlalchemy import inspect, select
 from app.config import settings
 from app.database import SessionLocal, engine
 from app.deps import local_user, states_for, today
-from app.models import Problem, ReviewState
+from app.models import Problem, ProblemNote, ReviewState
 from app.srs import DEFAULT_EASE
 from seed_db import SEED
 
@@ -51,15 +52,23 @@ def main() -> None:
     if not inspect(engine).has_table("problems"):
         sys.exit("No tables yet - run `python migrate.py` and `python seed_db.py` first.")
 
-    notes = json.loads(SEED.read_text(encoding="utf-8"))["problems"]
-    solved = {p["number"] for p in notes if p.get("solved")}
+    from_notes = {p["number"]: p for p in json.loads(SEED.read_text(encoding="utf-8"))["problems"]}
+    solved = {n for n, p in from_notes.items() if p.get("solved")}
     db = SessionLocal()
-    added = templates = 0
+    added = templates = noted = 0
     try:
         user = local_user(db)
         d = today(user.timezone)
         states = states_for(db, user.id)
+        have_notes = set(db.scalars(
+            select(ProblemNote.problem_id).where(ProblemNote.user_id == user.id)))
         for p in db.scalars(select(Problem)):
+            item = from_notes.get(p.number)
+            if (item and p.id not in have_notes
+                    and (item.get("notes") or item.get("code"))):
+                db.add(ProblemNote(user_id=user.id, problem_id=p.id,
+                                   notes=item.get("notes", ""), code=item.get("code", "")))
+                noted += 1
             if p.id in states:
                 continue
             if p.kind == "problem" and p.number in solved:
@@ -77,7 +86,8 @@ def main() -> None:
         db.commit()
     finally:
         db.close()
-    print(f"Personal seed: {added} solved problems and {templates} templates start due today")
+    print(f"Personal seed: {added} solved problems and {templates} templates start due today;"
+          f" notes for {noted} problems")
 
 
 if __name__ == "__main__":

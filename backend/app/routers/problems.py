@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user, get_problem, states_for
+from ..deps import get_current_user, get_problem, notes_for, states_for
 from ..models import Problem, ReviewState, User
 from ..scheduler import roadmap_key
 from ..schemas import ProblemDetail, ProblemOut
@@ -62,7 +62,8 @@ def problem_detail(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return ProblemDetail.of(problem, db.get(ReviewState, (user.id, problem.id)))
+    return ProblemDetail.of(problem, db.get(ReviewState, (user.id, problem.id)),
+                            notes_for(db, user.id, problem.id))
 
 
 @router.patch("/{number}", response_model=ProblemDetail)
@@ -72,10 +73,10 @@ def update_problem(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update the notes or the stored solution."""
+    """Update your notes or stored solution for this problem."""
+    note = notes_for(db, user.id, problem.id, create=True)
     for field in ("notes", "code"):
         if field in payload:
-            setattr(problem, field, payload[field] or "")
+            setattr(note, field, payload[field] or "")
     db.commit()
-    db.refresh(problem)
-    return ProblemDetail.of(problem, db.get(ReviewState, (user.id, problem.id)))
+    return ProblemDetail.of(problem, db.get(ReviewState, (user.id, problem.id)), note)

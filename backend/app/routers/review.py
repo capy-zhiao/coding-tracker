@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from .. import llm
 from ..complexity import COMPLEXITY_CHOICES, EXPECTED, check as check_complexity
 from ..database import get_db
-from ..deps import effective_caps, ensure_state, get_current_user, get_problem, user_today
+from ..deps import (
+    effective_caps, ensure_state, get_current_user, get_problem, notes_for, user_today,
+)
 from ..models import Attempt, Problem, User
 from ..schemas import (
     AttemptIn, AttemptOut, AttemptResult, ComplexityCheck, DailyQueueOut,
@@ -115,9 +117,9 @@ def submit_attempt(
     if payload.seconds > 0 and (st.best_seconds is None or payload.seconds < st.best_seconds):
         st.best_seconds = payload.seconds
 
-    # 3. Keep the latest solution on the problem so the next pass can diff against it
+    # 3. Keep your latest solution so the next pass can diff against it
     if payload.code.strip():
-        problem.code = payload.code
+        notes_for(db, user.id, problem.id, create=True).code = payload.code
 
     db.commit()
     db.refresh(attempt)

@@ -65,9 +65,9 @@ def test_seed_builds_the_set_and_prunes_only_untouched_problems(tmp_path):
 
     # Two problems outside the set: one practised, one never touched
     con.execute("INSERT INTO problems (number,title,difficulty,chapter_num,chapter,url,"
-                "in_neetcode150,in_top150,in_lc75,kind,notes,code,patterns) VALUES "
-                "(1406,'Stone Game III','Hard',13,'1-D DP','',0,0,0,'problem','','','[]'),"
-                "(877,'Stone Game','Medium',14,'2-D DP','',0,0,0,'problem','','','[]')")
+                "in_neetcode150,in_top150,in_lc75,kind,patterns) VALUES "
+                "(1406,'Stone Game III','Hard',13,'1-D DP','',0,0,0,'problem','[]'),"
+                "(877,'Stone Game','Medium',14,'2-D DP','',0,0,0,'problem','[]')")
     pid = con.execute("SELECT id FROM problems WHERE number=1406").fetchone()[0]
     con.execute("INSERT INTO users (id,provider,provider_id,login,display_name,avatar_url,"
                 "is_owner,is_demo,ai_enabled,created_at) "

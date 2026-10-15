@@ -119,3 +119,19 @@ def test_only_solved_mock_draws_from_your_own_history(client, as_user, alice, bo
     assert client.post("/mock/start", params={"only_solved": True}).status_code == 200
     as_user(bob)
     assert client.post("/mock/start", params={"only_solved": True}).status_code == 404
+
+
+def test_notes_and_saved_code_are_per_user(client, as_user, alice, bob):
+    as_user(alice)
+    client.patch("/problems/1", json={"notes": "hash map of complements"})
+    client.post("/review/1/attempt", json={**ATTEMPT, "code": "alice's solution"})
+    detail = client.get("/problems/1").json()
+    assert (detail["notes"], detail["code"]) == ("hash map of complements", "alice's solution")
+
+    as_user(bob)
+    detail = client.get("/problems/1").json()
+    assert (detail["notes"], detail["code"]) == ("", "")
+    client.patch("/problems/1", json={"notes": "bob's take"})
+
+    as_user(alice)
+    assert client.get("/problems/1").json()["notes"] == "hash map of complements"

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import Problem, ReviewState, User
+from .models import Problem, ProblemNote, ReviewState, User
 
 
 def get_current_user(db: Session = Depends(get_db)) -> User:
@@ -60,6 +60,15 @@ def ensure_state(db: Session, user_id: int, problem: Problem) -> ReviewState:
         db.add(st)
         db.flush()
     return st
+
+
+def notes_for(db: Session, user_id: int, problem_id: int, create: bool = False) -> ProblemNote | None:
+    """This user's notes row for the problem; with create=True, made empty if missing."""
+    note = db.get(ProblemNote, (user_id, problem_id))
+    if note is None and create:
+        note = ProblemNote(user_id=user_id, problem_id=problem_id, notes="", code="")
+        db.add(note)
+    return note
 
 
 def states_for(db: Session, user_id: int, kind: str | None = None) -> dict[int, ReviewState]:
