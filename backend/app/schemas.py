@@ -53,7 +53,14 @@ class ProblemOut(BaseModel):
     in_lc75: bool = False
     kind: str
     patterns: list[str] = []
-    state: StateOut | None = None
+    state: StateOut | None = None        # the current user's, never anyone else's
+
+    @classmethod
+    def of(cls, problem, state=None):
+        """Build from a Problem row plus the current user's ReviewState (or None)."""
+        out = cls.model_validate(problem)
+        out.state = StateOut.model_validate(state) if state is not None else None
+        return out
 
 
 class ProblemDetail(ProblemOut):
@@ -62,11 +69,16 @@ class ProblemDetail(ProblemOut):
 
 
 class QueueItemOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     problem: ProblemOut
     reason: str
     priority_score: float = 0.0
     overdue_days: int = 0
+
+    @classmethod
+    def of(cls, item) -> "QueueItemOut":
+        """From a scheduler.QueueItem, which carries the user's state next to the problem."""
+        return cls(problem=ProblemOut.of(item.problem, item.state), reason=item.reason,
+                   priority_score=item.priority_score, overdue_days=item.overdue_days)
 
 
 class DailyQueueOut(BaseModel):

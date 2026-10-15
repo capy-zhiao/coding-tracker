@@ -7,7 +7,7 @@ from app.templates_ref import BY_NUMBER
 
 
 @pytest.fixture
-def sample_templates(db_session):
+def sample_templates(db_session, user):
     rows = [
         Problem(number=9001, title="Union-Find", difficulty="Hard", chapter_num=11,
                 chapter="Graphs", url="", kind="template", patterns=[]),
@@ -17,7 +17,8 @@ def sample_templates(db_session):
     db_session.add_all(rows)
     db_session.flush()
     for r in rows:
-        db_session.add(ReviewState(problem_id=r.id, interval_days=0, due=study_today()))
+        db_session.add(ReviewState(user_id=user.id, problem_id=r.id, interval_days=0,
+                                   due=study_today()))
     db_session.commit()
     return rows
 

@@ -9,49 +9,28 @@ Usage:  python seed_db.py    incremental: add new problems, keep attempt history
 
 Run migrate.py first: it creates and upgrades the tables, this only fills them.
 
-Problems already solved in the markdown notes start out "due today", so the very first
-daily queue picks up where the manual study plan left off.
+This is the catalogue everyone shares. Personal starting data (problems already solved in
+the notes start out due) is personal_seed.py, for the local user only.
 """
 from __future__ import annotations
 
 import json
 import sys
-from datetime import date
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, exists, select
 
 from sqlalchemy import inspect
 
 from app.database import SessionLocal, engine
-from app.models import Problem, ReviewState
+from app.models import Attempt, InterviewQA, Problem, ReviewState
 from app.neetcode150 import NEETCODE_150
 from app.study_plans import (
     CHAPTER_NAMES, LC_75, PROBLEM_SET, TOP_150, chapter_for, plan_entry,
 )
 from app.patterns import patterns_for
-from app.srs import DEFAULT_EASE
 
 SEED = Path(__file__).resolve().parent.parent / "data" / "seed.json"
-
-# Historic failure counts, migrated from the manual review plan. Without these every solved
-# problem would share the same priority; with them the first queue surfaces the problems
-# that were actually difficult.
-KNOWN_LAPSES = {
-    994: 3,   # Rotting Oranges: wrong counter, flag hack, -1 condition — three rewrites
-    695: 3,   # Max Area of Island: type, pass-by-value, visited lookup, missing return
-    261: 3,   # Graph Valid Tree: template copied wrong, flag overwrite, missing edge check
-    130: 2,   # Surrounded Regions: digit zero vs letter O, missing guard on 'T'
-    200: 2,   # Number of Islands: counter inside dfs, missing guard
-    417: 2,   # Pacific Atlantic: both oceans shared one visited set
-    207: 2,   # Course Schedule: adjacency direction reversed
-    33:  1,   # Search in Rotated Sorted Array: only worked after heavy print debugging
-    153: 1,
-    424: 1,
-    743: 1,   # Dijkstra: forgot to accumulate t1+t2, effectively wrote Prim
-    853: 1,   # Car Fleet: "else if" instead of elif, missing return
-    128: 1,   # Longest Consecutive Sequence: returned length instead of the max
-}
 
 # The 15 templates from the notes. They ride the same SRS machinery.
 TEMPLATES = [
@@ -73,14 +52,24 @@ TEMPLATES = [
 ]
 
 
+def _has_history(db, problem_id: int) -> bool:
+    """Whether any user has practised this problem: an attempt, a scheduled review, or a
+    mock-interview question."""
+    return bool(
+        db.scalar(select(exists().where(Attempt.problem_id == problem_id)))
+        or db.scalar(select(exists().where(ReviewState.problem_id == problem_id,
+                                           ReviewState.due.is_not(None))))
+        or db.scalar(select(exists().where(InterviewQA.problem_id == problem_id)))
+    )
+
+
 def main() -> None:
     if not inspect(engine).has_table("problems"):
         sys.exit("No tables yet - run `python migrate.py` first.")
 
     seed = {p["number"]: p for p in json.loads(SEED.read_text(encoding="utf-8"))["problems"]}
-    today = date.today()
     db = SessionLocal()
-    added = updated = with_state = removed = 0
+    added = updated = removed = 0
     kept_with_history: list[int] = []
 
     def item_for(number: int) -> dict:
@@ -135,24 +124,14 @@ def main() -> None:
                     p.code = item["code"]
                 updated += 1
 
-            # Already solved -> due today, so it enters the review queue immediately
-            if item["solved"] and p.state is None:
-                lapses = KNOWN_LAPSES.get(number, 0)
-                db.add(ReviewState(
-                    problem_id=p.id, interval_days=1,
-                    # Problems that caused trouble get a lower ease, so gaps grow slower
-                    ease=max(1.3, DEFAULT_EASE - 0.2 * lapses),
-                    reps=1, lapses=lapses, due=today, total_attempts=0,
-                ))
-                with_state += 1
-
-        # Problems no longer in either list. Anything you've practised stays.
+        # Problems no longer in any list. Anything anyone has practised stays.
         for number, p in existing.items():
             if p.kind != "problem" or number in PROBLEM_SET:
                 continue
-            if p.attempts or (p.state and p.state.due is not None):
+            if _has_history(db, p.id):
                 kept_with_history.append(number)
                 continue
+            db.execute(delete(ReviewState).where(ReviewState.problem_id == p.id))
             db.delete(p)
             removed += 1
 
@@ -166,8 +145,6 @@ def main() -> None:
                 notes="Blind-write practice", code="", patterns=[],
             )
             db.add(t)
-            db.flush()
-            db.add(ReviewState(problem_id=t.id, interval_days=0, due=today))
             t_added += 1
 
         db.commit()
@@ -178,7 +155,6 @@ def main() -> None:
     print(f"  problems added: {added}   updated: {updated}   removed: {removed}")
     if kept_with_history:
         print(f"  not in either list but kept (has practice history): {kept_with_history}")
-    print(f"  solved -> due today: {with_state}")
     print(f"  templates: {t_added}")
     print(f"  pattern tags refreshed on {added + updated} problems")
 

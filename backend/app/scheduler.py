@@ -22,12 +22,13 @@ import random
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from .config import settings
+from .deps import states_for
 from .models import Problem, ReviewState
 from .neetcode150 import NEETCODE_150_POSITION
 from .study_plans import PLANS, first_plan
@@ -41,6 +42,7 @@ class QueueItem:
     reason: str                 # "due" | "new" | "template"
     priority_score: float = 0.0
     overdue_days: int = 0
+    state: ReviewState | None = None    # the user's SRS row; None if never attempted
 
 
 @dataclass
@@ -175,23 +177,19 @@ def pick_tiered(
 
 
 def _load(db: Session, kind: str) -> list[Problem]:
-    stmt = (
-        select(Problem)
-        .options(selectinload(Problem.state))
-        .where(Problem.kind == kind)
-    )
-    return list(db.scalars(stmt))
+    return list(db.scalars(select(Problem).where(Problem.kind == kind)))
 
 
 def build_today(
     db: Session,
+    user_id: int,
     today: date | None = None,
     review_cap: int | None = None,
     new_cap: int | None = None,
     shuffle: int | None = None,
     skip: Collection[int] = (),
 ) -> DailyQueue:
-    """Today's queue.
+    """One user's queue for today.
 
     Reviews are ranked by priority, unless `shuffle` (a seed) is given: then they're picked
     at random — "Next batch" on the home screen. `skip` holds ids of the batch being
@@ -202,12 +200,13 @@ def build_today(
     new_cap = new_cap if new_cap is not None else settings.daily_new_cap
 
     problems = _load(db, "problem")
+    states = states_for(db, user_id)
     queue = DailyQueue()
 
     # --- 1. Due reviews, ranked, capped ---
     due_items: list[QueueItem] = []
     for p in problems:
-        st = p.state
+        st = states.get(p.id)
         if st is None or st.due is None or st.due > today:
             continue
         s = st.to_srs()
@@ -216,6 +215,7 @@ def build_today(
             reason="due",
             priority_score=priority(s, today, p.difficulty, p.chapter_num),
             overdue_days=(today - st.due).days,
+            state=st,
         ))
     due_items.sort(key=lambda i: i.priority_score, reverse=True)
     queue.total_due = len(due_items)
@@ -232,36 +232,46 @@ def build_today(
     queue.deferred = len(due_items) - len(queue.reviews)
 
     # --- 2. New problems: NeetCode 150, then Top Interview 150, then LeetCode 75 ---
-    fresh = [p for p in problems if p.state is None or p.state.due is None]
+    fresh = [p for p in problems if p.id not in states or states[p.id].due is None]
     tiers = new_problem_tiers(
         fresh, settings.new_hard_last, settings.new_neetcode150_first,
         settings.new_later_chapter_set,
     )
     queue.new_problems = pick_tiered(
-        [[QueueItem(problem=p, reason="new") for p in tier] for tier in tiers], new_cap,
+        [[QueueItem(problem=p, reason="new", state=states.get(p.id)) for p in tier]
+         for tier in tiers], new_cap,
         settings.daily_new_per_chapter_cap, settings.daily_new_per_pattern_cap,
     )
 
     # --- 3. One template: the due one, otherwise whichever has gone longest untouched ---
     templates = _load(db, "template")
-    t_due = [t for t in templates if t.state and t.state.due and t.state.due <= today]
+    t_due = [t for t in templates
+             if t.id in states and states[t.id].due and states[t.id].due <= today]
     if t_due:
-        t_due.sort(key=lambda t: (t.state.due, -t.state.lapses))
+        t_due.sort(key=lambda t: (states[t.id].due, -states[t.id].lapses))
         pick = t_due[0]
     elif templates:
-        pick = min(templates, key=lambda t: (
-            t.state.last_attempt_at if t.state and t.state.last_attempt_at else 0,
-        ))
+        pick = min(templates, key=lambda t: _untouched_key(states.get(t.id)))
     else:
         pick = None
     if pick is not None:
-        queue.templates = [QueueItem(problem=pick, reason="template")]
+        queue.templates = [QueueItem(problem=pick, reason="template", state=states.get(pick.id))]
 
     return queue
 
 
-def forecast(db: Session, today: date | None = None, days: int = 14) -> list[dict]:
-    """Review load for the next N days, so the UI can warn you before a pile-up.
+def _untouched_key(st: ReviewState | None) -> tuple[int, datetime]:
+    """Sort key for "longest untouched first": never practised before practised, then the
+    oldest attempt. Kept a uniform (int, datetime) pair: comparing a datetime against a
+    placeholder like 0 raises TypeError as soon as some templates have been done and
+    others haven't."""
+    if st is None or st.last_attempt_at is None:
+        return (0, datetime.min)
+    return (1, st.last_attempt_at)
+
+
+def forecast(db: Session, user_id: int, today: date | None = None, days: int = 14) -> list[dict]:
+    """One user's review load for the next N days, so the UI can warn before a pile-up.
 
     Problems only: template drills have their own one-a-day slot and never compete for
     the review cap, so counting them here would overstate the load the Review section
@@ -273,7 +283,8 @@ def forecast(db: Session, today: date | None = None, days: int = 14) -> list[dic
     stmt = (
         select(ReviewState)
         .join(Problem, Problem.id == ReviewState.problem_id)
-        .where(ReviewState.due.is_not(None), Problem.kind == "problem")
+        .where(ReviewState.user_id == user_id, ReviewState.due.is_not(None),
+               Problem.kind == "problem")
     )
     for st in db.scalars(stmt):
         if st.due < today:

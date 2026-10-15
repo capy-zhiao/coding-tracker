@@ -69,9 +69,13 @@ def test_seed_builds_the_set_and_prunes_only_untouched_problems(tmp_path):
                 "(1406,'Stone Game III','Hard',13,'1-D DP','',0,0,0,'problem','','','[]'),"
                 "(877,'Stone Game','Medium',14,'2-D DP','',0,0,0,'problem','','','[]')")
     pid = con.execute("SELECT id FROM problems WHERE number=1406").fetchone()[0]
-    con.execute("INSERT INTO attempts (problem_id,created_at,grade,seconds,looked_at_solution,"
-                "had_bugs,mistakes,code,note,mode,time_complexity,space_complexity) "
-                "VALUES (?,'2026-09-01','good',60,0,0,'[]','','','practice','','')", (pid,))
+    con.execute("INSERT INTO users (id,provider,provider_id,login,display_name,avatar_url,"
+                "is_owner,is_demo,ai_enabled,created_at) "
+                "VALUES (7,'github','7','someone','','',0,0,0,'2026-09-01')")
+    con.execute("INSERT INTO attempts (user_id,problem_id,created_at,grade,seconds,"
+                "looked_at_solution,had_bugs,mistakes,code,note,mode,time_complexity,"
+                "space_complexity) "
+                "VALUES (7,?,'2026-09-01','good',60,0,0,'[]','','','practice','','')", (pid,))
     con.commit()
 
     out = run_seed(db)

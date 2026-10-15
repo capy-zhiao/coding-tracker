@@ -46,7 +46,14 @@ def client(db_session):
 
 
 @pytest.fixture
-def sample_problems(db_session):
+def user(db_session):
+    """The local user, whom every request belongs to in local mode."""
+    from app.deps import local_user
+    return local_user(db_session)
+
+
+@pytest.fixture
+def sample_problems(db_session, user):
     """Three problems: one never attempted, two solved and due for review."""
     from datetime import timedelta
     # The app's own notion of today, never date.today(): the two differ for part of every
@@ -63,9 +70,9 @@ def sample_problems(db_session):
     db_session.add_all(rows)
     db_session.flush()
     # 994 is five days overdue and has failed three times -> highest priority
-    db_session.add(ReviewState(problem_id=rows[1].id, interval_days=2, reps=1,
+    db_session.add(ReviewState(user_id=user.id, problem_id=rows[1].id, interval_days=2, reps=1,
                                lapses=3, due=today - timedelta(days=5)))
-    db_session.add(ReviewState(problem_id=rows[2].id, interval_days=4, reps=2,
+    db_session.add(ReviewState(user_id=user.id, problem_id=rows[2].id, interval_days=4, reps=2,
                                lapses=0, due=today))
     db_session.commit()
     return rows

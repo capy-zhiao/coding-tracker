@@ -92,7 +92,7 @@ def test_fewer_items_than_the_cap():
     assert numbers(got) == [261, 200]
 
 
-def test_today_endpoint_interleaves_chapters(client, db_session):
+def test_today_endpoint_interleaves_chapters(client, db_session, user):
     """End to end: three failing graph problems and one array problem, cap 3."""
     d = study_today()
     rows = [
@@ -104,7 +104,7 @@ def test_today_endpoint_interleaves_chapters(client, db_session):
                     chapter_num=chapter, chapter=f"Ch{chapter}", url="", kind="problem")
         db_session.add(p)
         db_session.flush()
-        db_session.add(ReviewState(problem_id=p.id, interval_days=1, reps=1,
+        db_session.add(ReviewState(user_id=user.id, problem_id=p.id, interval_days=1, reps=1,
                                    lapses=lapses, due=d - timedelta(days=1)))
     db_session.commit()
 
@@ -113,7 +113,7 @@ def test_today_endpoint_interleaves_chapters(client, db_session):
     assert q["deferred"] == 1
 
 
-def test_next_batch_is_random_and_stable(client, db_session):
+def test_next_batch_is_random_and_stable(client, db_session, user):
     """'Next batch' sends a seed and the batch on screen. The pick is random, avoids that
     batch while enough is due, and stays put as its problems get done."""
     d = study_today()
@@ -123,7 +123,7 @@ def test_next_batch_is_random_and_stable(client, db_session):
                     chapter_num=number, chapter=f"Ch{number}", url="", kind="problem")
         db_session.add(p)
         db_session.flush()
-        states[number] = ReviewState(problem_id=p.id, interval_days=1, reps=1,
+        states[number] = ReviewState(user_id=user.id, problem_id=p.id, interval_days=1, reps=1,
                                      lapses=13 - number, due=d - timedelta(days=1))
         db_session.add(states[number])
     db_session.commit()

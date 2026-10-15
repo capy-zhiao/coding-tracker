@@ -4,12 +4,12 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from .. import credit, llm
 from ..complexity import EXPECTED, check as check_complexity
 from ..database import get_db
-from ..deps import get_current_user, local_date, user_today
+from ..deps import get_current_user, local_date, states_for, user_today
 from ..models import Attempt, Problem, User
 from ..patterns import PATTERN_TEMPLATE, PATTERNS, describe, label, patterns_for
 from ..schemas import ChapterStat, ComplexityStat, PatternStat, StatsOut
@@ -28,7 +28,7 @@ def _streak(db: Session, user: User) -> int:
     """
     days = {
         local_date(a.created_at, user.timezone).isoformat()
-        for a in db.scalars(select(Attempt))
+        for a in db.scalars(select(Attempt).where(Attempt.user_id == user.id))
     }
     if not days:
         return 0
@@ -47,15 +47,14 @@ def _streak(db: Session, user: User) -> int:
 @router.get("", response_model=StatsOut)
 def overview(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     d = user_today(user)
-    problems = list(db.scalars(
-        select(Problem).options(selectinload(Problem.state)).where(Problem.kind == "problem")
-    ))
+    problems = list(db.scalars(select(Problem).where(Problem.kind == "problem")))
+    st = states_for(db, user.id, "problem").get
 
-    started = sum(1 for p in problems if p.state and p.state.due)
-    mastered = sum(1 for p in problems if p.state and p.state.interval_days >= MASTERED_INTERVAL)
-    due_today = sum(1 for p in problems if p.state and p.state.due and p.state.due <= d)
+    started = sum(1 for p in problems if st(p.id) and st(p.id).due)
+    mastered = sum(1 for p in problems if st(p.id) and st(p.id).interval_days >= MASTERED_INTERVAL)
+    due_today = sum(1 for p in problems if st(p.id) and st(p.id).due and st(p.id).due <= d)
 
-    attempts = list(db.scalars(select(Attempt)))
+    attempts = list(db.scalars(select(Attempt).where(Attempt.user_id == user.id)))
     week_ago = d - timedelta(days=7)
     attempts_7d = sum(1 for a in attempts if local_date(a.created_at, user.timezone) >= week_ago)
     timed = [a.seconds for a in attempts if a.seconds > 0]
@@ -65,8 +64,8 @@ def overview(db: Session = Depends(get_db), user: User = Depends(get_current_use
         g = [p for p in problems if p.chapter_num == ch]
         by_chapter.append(ChapterStat(
             chapter_num=ch, chapter=g[0].chapter, total=len(g),
-            started=sum(1 for p in g if p.state and p.state.due),
-            mastered=sum(1 for p in g if p.state and p.state.interval_days >= MASTERED_INTERVAL),
+            started=sum(1 for p in g if st(p.id) and st(p.id).due),
+            mastered=sum(1 for p in g if st(p.id) and st(p.id).interval_days >= MASTERED_INTERVAL),
         ))
 
     return StatsOut(
@@ -85,7 +84,7 @@ def heatmap(
     """Attempts per day for the last N days — a GitHub-style contribution grid."""
     start = user_today(user) - timedelta(days=days)
     counter: Counter[str] = Counter()
-    for a in db.scalars(select(Attempt)):
+    for a in db.scalars(select(Attempt).where(Attempt.user_id == user.id)):
         day = local_date(a.created_at, user.timezone)
         if day >= start:
             counter[day.isoformat()] += 1
@@ -98,20 +97,19 @@ W_COVERAGE, W_AGAIN, W_LAPSE = 0.45, 0.35, 0.20
 
 
 @router.get("/patterns", response_model=list[PatternStat])
-def pattern_proficiency(db: Session = Depends(get_db)):
+def pattern_proficiency(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Proficiency grouped by algorithm pattern rather than by roadmap chapter.
 
     An interviewer asks "is this a sliding window or a monotonic stack", never "which
     chapter is this". Sorted weakest first, so the top of the list is the revision list.
     """
-    problems = list(db.scalars(
-        select(Problem).options(selectinload(Problem.state)).where(Problem.kind == "problem")
-    ))
+    problems = list(db.scalars(select(Problem).where(Problem.kind == "problem")))
+    st = states_for(db, user.id, "problem").get
     by_id = {p.id: p for p in problems}
 
     # attempts grouped by problem, so each attempt is counted once per pattern
     attempts_by_problem: dict[int, list[Attempt]] = {}
-    for a in db.scalars(select(Attempt)):
+    for a in db.scalars(select(Attempt).where(Attempt.user_id == user.id)):
         attempts_by_problem.setdefault(a.problem_id, []).append(a)
 
     buckets: dict[str, list[Problem]] = {pid: [] for pid in PATTERNS}
@@ -124,12 +122,12 @@ def pattern_proficiency(db: Session = Depends(get_db)):
         if not group:
             continue
         total = len(group)
-        started = sum(1 for p in group if p.state and p.state.due)
+        started = sum(1 for p in group if st(p.id) and st(p.id).due)
         mastered = sum(
             1 for p in group
-            if p.state and p.state.interval_days >= MASTERED_INTERVAL
+            if st(p.id) and st(p.id).interval_days >= MASTERED_INTERVAL
         )
-        lapses = sum(p.state.lapses for p in group if p.state)
+        lapses = sum(st(p.id).lapses for p in group if st(p.id))
 
         atts = [a for p in group for a in attempts_by_problem.get(p.id, [])]
         timed = [a.seconds for a in atts if a.seconds > 0]
@@ -157,7 +155,7 @@ def pattern_proficiency(db: Session = Depends(get_db)):
 
 
 @router.get("/complexity", response_model=ComplexityStat)
-def complexity_accuracy(db: Session = Depends(get_db)):
+def complexity_accuracy(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """How often the self-reported big-O was right.
 
     An attempt counts when the AI has judged it or the problem has a reference answer;
@@ -169,7 +167,7 @@ def complexity_accuracy(db: Session = Depends(get_db)):
     wrong: Counter[int] = Counter()
     seen: Counter[int] = Counter()
 
-    for a in db.scalars(select(Attempt)):
+    for a in db.scalars(select(Attempt).where(Attempt.user_id == user.id)):
         if not (a.time_complexity or a.space_complexity):
             continue
         answered += 1

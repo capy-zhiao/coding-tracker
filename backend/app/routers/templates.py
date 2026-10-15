@@ -9,11 +9,12 @@ Grading itself lives in blindwrite.py as pure functions; this module only wires 
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from ..blindwrite import grade, suggested_grade
 from ..database import get_db
-from ..models import Problem
+from ..deps import get_current_user, states_for
+from ..models import Problem, User
 from ..schemas import BlindWriteIn, BlindWriteOut, StateOut, TemplateOut
 from ..templates_ref import BY_NUMBER
 
@@ -21,21 +22,19 @@ router = APIRouter(prefix="/templates", tags=["templates"])
 
 
 @router.get("", response_model=list[TemplateOut])
-def list_templates(db: Session = Depends(get_db)):
-    """All 15 drills with their SRS state, ordered by the roadmap chapter they belong to."""
+def list_templates(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """All 15 drills with your SRS state, ordered by the roadmap chapter they belong to."""
     rows = db.scalars(
-        select(Problem)
-        .options(selectinload(Problem.state))
-        .where(Problem.kind == "template")
-        .order_by(Problem.number)
+        select(Problem).where(Problem.kind == "template").order_by(Problem.number)
     )
+    states = states_for(db, user.id, "template")
     out = []
     for p in rows:
         ref = BY_NUMBER.get(p.number)
         out.append(TemplateOut(
             number=p.number, title=p.title, chapter=p.chapter,
             check_count=len(ref.checks) if ref else 0,
-            state=StateOut.model_validate(p.state) if p.state else None,
+            state=StateOut.model_validate(states[p.id]) if p.id in states else None,
         ))
     return out
 

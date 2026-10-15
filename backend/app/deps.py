@@ -19,11 +19,11 @@ def get_current_user(db: Session = Depends(get_db)) -> User:
     request is theirs.
     """
     if settings.auth_mode == "local":
-        return _local_user(db)
+        return local_user(db)
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login required")
 
 
-def _local_user(db: Session) -> User:
+def local_user(db: Session) -> User:
     query = select(User).where(User.provider == "local", User.provider_id == "local")
     user = db.scalar(query)
     if user is not None:
@@ -52,14 +52,23 @@ def get_problem(number: int, db: Session = Depends(get_db)) -> Problem:
     return p
 
 
-def ensure_state(db: Session, problem: Problem) -> ReviewState:
-    """Lazily create the SRS row the first time a problem is attempted."""
-    if problem.state is None:
-        st = ReviewState(problem_id=problem.id)
+def ensure_state(db: Session, user_id: int, problem: Problem) -> ReviewState:
+    """This user's SRS row for the problem, created the first time they attempt it."""
+    st = db.get(ReviewState, (user_id, problem.id))
+    if st is None:
+        st = ReviewState(user_id=user_id, problem_id=problem.id)
         db.add(st)
         db.flush()
-        problem.state = st
-    return problem.state
+    return st
+
+
+def states_for(db: Session, user_id: int, kind: str | None = None) -> dict[int, ReviewState]:
+    """All of one user's SRS rows, keyed by problem id. One query instead of one per problem;
+    a problem missing from the dict has never been attempted by this user."""
+    stmt = select(ReviewState).where(ReviewState.user_id == user_id)
+    if kind is not None:
+        stmt = stmt.join(Problem, Problem.id == ReviewState.problem_id).where(Problem.kind == kind)
+    return {st.problem_id: st for st in db.scalars(stmt)}
 
 
 def _zone(tz: str | None = None) -> ZoneInfo | None:

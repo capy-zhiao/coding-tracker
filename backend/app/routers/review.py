@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import llm
@@ -11,7 +12,7 @@ from ..deps import effective_caps, ensure_state, get_current_user, get_problem, 
 from ..models import Attempt, Problem, User
 from ..schemas import (
     AttemptIn, AttemptOut, AttemptResult, ComplexityCheck, DailyQueueOut,
-    GradeSuggestion, StateOut,
+    GradeSuggestion, QueueItemOut, StateOut,
 )
 from ..scheduler import build_today, forecast
 from ..srs import review as srs_review, suggest_grade
@@ -31,10 +32,12 @@ def today_queue(
     """What to work on today — this powers the home screen."""
     d = user_today(user)
     review_cap, new_cap = effective_caps(user, review_cap, new_cap)
-    q = build_today(db, d, review_cap, new_cap, shuffle, skip)
+    q = build_today(db, user.id, d, review_cap, new_cap, shuffle, skip)
     return DailyQueueOut(
         date=d,
-        reviews=q.reviews, new_problems=q.new_problems, templates=q.templates,
+        reviews=[QueueItemOut.of(i) for i in q.reviews],
+        new_problems=[QueueItemOut.of(i) for i in q.new_problems],
+        templates=[QueueItemOut.of(i) for i in q.templates],
         total_due=q.total_due, deferred=q.deferred, review_cap=review_cap,
     )
 
@@ -46,7 +49,7 @@ def review_forecast(
     days: int = Query(14, ge=1, le=60),
 ):
     """Upcoming review load, rendered as a bar chart in the UI."""
-    return forecast(db, user_today(user), days)
+    return forecast(db, user.id, user_today(user), days)
 
 
 @router.get("/suggest-grade", response_model=GradeSuggestion)
@@ -77,10 +80,11 @@ def submit_attempt(
 ):
     """Record an attempt and let SRS compute the next review date."""
     d = user_today(user)
-    st = ensure_state(db, problem)
+    st = ensure_state(db, user.id, problem)
 
     # 1. Store this attempt
     attempt = Attempt(
+        user_id=user.id,
         problem_id=problem.id,
         grade=payload.grade,
         seconds=payload.seconds,
@@ -136,13 +140,25 @@ def complexity_choices():
 
 
 @router.get("/{number}/attempts", response_model=list[AttemptOut])
-def attempt_history(problem: Problem = Depends(get_problem)):
-    """History for this problem — lets you diff this attempt against the previous one."""
-    return problem.attempts
+def attempt_history(
+    problem: Problem = Depends(get_problem),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Your history for this problem — lets you diff this attempt against the previous one."""
+    return db.scalars(
+        select(Attempt)
+        .where(Attempt.user_id == user.id, Attempt.problem_id == problem.id)
+        .order_by(Attempt.created_at.desc())
+    ).all()
 
 
 @router.post("/attempts/{attempt_id}/complexity-ai", response_model=AttemptOut)
-def ai_complexity(attempt_id: int, db: Session = Depends(get_db)):
+def ai_complexity(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Have the LLM judge the stated complexity against the code actually submitted.
 
     Separate from submitting, because a thinking-mode reply can take tens of seconds and
@@ -152,7 +168,8 @@ def ai_complexity(attempt_id: int, db: Session = Depends(get_db)):
     if not llm.is_enabled():
         raise HTTPException(503, "AI features are off — set LLM_PROVIDER and a key in backend/.env")
     attempt = db.get(Attempt, attempt_id)
-    if attempt is None:
+    # Someone else's attempt answers exactly like a missing one, so ids can't be probed
+    if attempt is None or attempt.user_id != user.id:
         raise HTTPException(404, f"No attempt {attempt_id}")
     if not attempt.code.strip():
         raise HTTPException(400, "This attempt has no code to analyse")

@@ -1,17 +1,22 @@
 """Database tables (SQLAlchemy 2.0 style).
 
   User        — who is practising; local mode has exactly one
-  Problem     — static information for the problems and templates
-  ReviewState — SRS state per problem (1:1); the persisted form of srs.SrsState
-  Attempt     — one row per attempt (1:N); powers stats, code diffs and complexity accuracy
-  FollowUp    — cached interviewer follow-up questions (1:N)
+  Problem     — static information for the problems and templates, shared by everyone
+  ReviewState — SRS state per (user, problem); the persisted form of srs.SrsState
+  Attempt     — one row per attempt; powers stats, code diffs and complexity accuracy
+  FollowUp    — cached interviewer follow-up questions per problem, shared
+  InterviewQA — a user's mock-interview question, answer and grade
+
+Personal rows always carry user_id and every query filters on it. Problem deliberately
+has no relationship to them: problem.state would silently mean "someone's state".
 """
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (
-    JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint,
+    JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,36 +75,29 @@ class Problem(Base):
     # Window chapter but is really a monotonic deque.
     patterns: Mapped[list] = mapped_column(JSON, default=list)
 
-    state: Mapped["ReviewState"] = relationship(
-        back_populates="problem", uselist=False, cascade="all, delete-orphan"
-    )
-    attempts: Mapped[list["Attempt"]] = relationship(
-        back_populates="problem", cascade="all, delete-orphan",
-        order_by="Attempt.created_at.desc()",
-    )
     followups: Mapped[list["FollowUp"]] = relationship(
-        back_populates="problem", cascade="all, delete-orphan"
-    )
-    interview_qas: Mapped[list["InterviewQA"]] = relationship(
         back_populates="problem", cascade="all, delete-orphan"
     )
 
 
 class ReviewState(Base):
-    """SRS state. Fields mirror srs.SrsState one for one."""
+    """One user's SRS state for one problem. Fields mirror srs.SrsState one for one."""
     __tablename__ = "review_states"
+    __table_args__ = (Index("ix_review_states_user_due", "user_id", "due"),)
 
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), primary_key=True)
     interval_days: Mapped[int] = mapped_column(Integer, default=0)
     ease: Mapped[float] = mapped_column(Float, default=DEFAULT_EASE)
     reps: Mapped[int] = mapped_column(Integer, default=0)
     lapses: Mapped[int] = mapped_column(Integer, default=0)
-    due: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    due: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     total_attempts: Mapped[int] = mapped_column(Integer, default=0)
     best_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    problem: Mapped[Problem] = relationship(back_populates="state")
+    problem: Mapped[Problem] = relationship()
 
     def to_srs(self) -> SrsState:
         """Bridge from the ORM row to the immutable value the pure functions operate on."""
@@ -117,6 +115,8 @@ class Attempt(Base):
     __tablename__ = "attempts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True)
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
     grade: Mapped[str] = mapped_column(String(10))               # again/hard/good/easy
@@ -141,7 +141,7 @@ class Attempt(Base):
     # Template blind-writes only: fraction of checkpoints hit, 0..1
     blindwrite_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    problem: Mapped[Problem] = relationship(back_populates="attempts")
+    problem: Mapped[Problem] = relationship()
 
 
 class FollowUp(Base):
@@ -164,6 +164,8 @@ class InterviewQA(Base):
     __tablename__ = "interview_qas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True)
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), index=True)
     code: Mapped[str] = mapped_column(Text, default="")          # snapshot the question refers to
     question: Mapped[str] = mapped_column(Text)
@@ -173,4 +175,4 @@ class InterviewQA(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    problem: Mapped[Problem] = relationship(back_populates="interview_qas")
+    problem: Mapped[Problem] = relationship()

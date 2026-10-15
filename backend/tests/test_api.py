@@ -115,7 +115,8 @@ def test_mock_start(client, sample_problems):
     assert body["minutes"] == 35
 
 
-def test_forecast_counts_problems_but_not_template_drills(client, sample_problems, db_session):
+def test_forecast_counts_problems_but_not_template_drills(client, sample_problems, db_session,
+                                                           user):
     """Drills have their own slot; counting them would overstate the review load."""
     from app.models import Problem, ReviewState
     from app.deps import today as study_today
@@ -123,7 +124,7 @@ def test_forecast_counts_problems_but_not_template_drills(client, sample_problem
                 chapter="Graphs", url="", kind="template")
     db_session.add(t)
     db_session.flush()
-    db_session.add(ReviewState(problem_id=t.id, interval_days=0,
+    db_session.add(ReviewState(user_id=user.id, problem_id=t.id, interval_days=0,
                                due=study_today() - timedelta(days=3)))
     db_session.commit()
 

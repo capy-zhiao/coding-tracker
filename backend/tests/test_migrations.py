@@ -92,3 +92,34 @@ def test_running_twice_changes_nothing(tmp_path, capsys):
     capsys.readouterr()
     migrate.migrate(url)
     assert "Schema up to date" in capsys.readouterr().out
+
+
+def test_existing_rows_are_given_to_the_local_user(tmp_path):
+    url = pre_alembic_database(tmp_path)     # one review state and one attempt, no users
+
+    migrate.migrate(url)
+
+    con = sqlite3.connect(tmp_path / "tracker.db")
+    users = con.execute("SELECT id, provider, provider_id, is_owner FROM users").fetchall()
+    assert len(users) == 1
+    uid, provider, provider_id, is_owner = users[0]
+    assert (provider, provider_id, is_owner) == ("local", "local", 1)
+    assert con.execute("SELECT user_id FROM review_states").fetchall() == [(uid,)]
+    assert con.execute("SELECT user_id FROM attempts").fetchall() == [(uid,)]
+    con.close()
+
+
+def test_ownership_can_be_rolled_back_without_losing_the_local_users_rows(tmp_path):
+    url = pre_alembic_database(tmp_path)
+    migrate.migrate(url)
+    cfg = migrate.alembic_config(url)
+
+    command.downgrade(cfg, "0002")
+
+    con = sqlite3.connect(tmp_path / "tracker.db")
+    assert con.execute("SELECT count(*) FROM review_states").fetchone() == (1,)
+    assert con.execute("SELECT count(*) FROM attempts").fetchone() == (1,)
+    assert "user_id" not in {r[1] for r in con.execute("PRAGMA table_info(attempts)")}
+    con.close()
+    command.upgrade(cfg, "head")                 # and forward again
+    assert migrate.current_revision(url) == head(url)

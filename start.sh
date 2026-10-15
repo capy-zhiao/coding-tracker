@@ -46,7 +46,8 @@ fi
 
 if [[ ! -f "$BACKEND/tracker.db" ]]; then
   yellow "No database found - creating it and importing the problems..."
-  (cd "$BACKEND" && ./.venv/bin/python migrate.py && ./.venv/bin/python seed_db.py) || {
+  (cd "$BACKEND" && ./.venv/bin/python migrate.py && ./.venv/bin/python seed_db.py \
+     && ./.venv/bin/python personal_seed.py) || {
     red "Database setup failed"; exit 1; }
 else
   # Runs any new Alembic migrations, after taking a dated backup. Idempotent, and a no-op
@@ -54,8 +55,10 @@ else
   # file is the only copy of your practice history.
   (cd "$BACKEND" && ./.venv/bin/python migrate.py) || {
     red "Schema migration failed - your data is untouched, see backend/.backups/"; exit 1; }
-  # Refreshes pattern tags and picks up problems added to data/seed.json.
-  (cd "$BACKEND" && ./.venv/bin/python seed_db.py >/dev/null)
+  # Refreshes pattern tags and picks up problems added to data/ (and problems newly
+  # marked solved in the notes, for the local user).
+  (cd "$BACKEND" && ./.venv/bin/python seed_db.py >/dev/null \
+     && ./.venv/bin/python personal_seed.py >/dev/null)
 fi
 
 # ---------- backend ----------

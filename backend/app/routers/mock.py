@@ -11,12 +11,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from .. import llm
 from ..database import get_db
-from ..deps import get_problem
-from ..models import FollowUp, InterviewQA, Problem
+from ..deps import get_current_user, get_problem, states_for
+from ..models import FollowUp, InterviewQA, Problem, User
 from ..schemas import (
     AnswerGradeOut, AnswerIn, FollowUpOut, InterviewQuestionOut,
     InterviewStartIn, MockStartOut, ProblemDetail,
@@ -40,26 +40,28 @@ GENERIC_FOLLOWUPS = [
 @router.post("/start", response_model=MockStartOut)
 def start_mock(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
     difficulty: str | None = Query(None, description="Restrict to a difficulty"),
     chapter: int | None = Query(None, description="Restrict to a chapter"),
     only_solved: bool = Query(False, description="Only draw problems you have solved before"),
 ):
     """Draw a random problem and start a mock interview."""
-    stmt = select(Problem).options(selectinload(Problem.state)).where(Problem.kind == "problem")
+    stmt = select(Problem).where(Problem.kind == "problem")
     if difficulty:
         stmt = stmt.where(Problem.difficulty == difficulty)
     if chapter is not None:
         stmt = stmt.where(Problem.chapter_num == chapter)
 
     pool = list(db.scalars(stmt))
+    states = states_for(db, user.id, "problem")
     if only_solved:
-        pool = [p for p in pool if p.state and p.state.due]
+        pool = [p for p in pool if p.id in states and states[p.id].due]
     if not pool:
         raise HTTPException(404, "No problems match those filters")
 
     p = random.choice(pool)
     return MockStartOut(
-        problem=ProblemDetail.model_validate(p),
+        problem=ProblemDetail.of(p, states.get(p.id)),
         minutes=DEFAULT_MINUTES.get(p.difficulty, 35),
         followups_ready=bool(p.followups) or llm.is_enabled(),
     )
@@ -100,6 +102,7 @@ def start_code_interview(
     payload: InterviewStartIn,
     problem: Problem = Depends(get_problem),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Generate follow-up questions about the code written in this session.
 
@@ -119,7 +122,7 @@ def start_code_interview(
         raise HTTPException(502, "The AI call failed — the backend log has the reason")
 
     rows = [
-        InterviewQA(problem_id=problem.id, code=payload.code,
+        InterviewQA(user_id=user.id, problem_id=problem.id, code=payload.code,
                     question=i.question, key_points=i.hint)
         for i in items
     ]
@@ -129,12 +132,17 @@ def start_code_interview(
 
 
 @router.post("/qa/{qa_id}/answer", response_model=AnswerGradeOut)
-def answer_question(qa_id: int, payload: AnswerIn, db: Session = Depends(get_db)):
+def answer_question(
+    qa_id: int,
+    payload: AnswerIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Grade a written answer. Answering again replaces the previous answer and grade."""
     if not llm.is_enabled():
         raise HTTPException(503, "AI grading needs LLM_PROVIDER and a key in backend/.env")
     qa = db.get(InterviewQA, qa_id)
-    if qa is None:
+    if qa is None or qa.user_id != user.id:      # someone else's looks like a missing one
         raise HTTPException(404, f"No interview question {qa_id}")
     if not payload.answer.strip():
         raise HTTPException(400, "The answer is empty")
