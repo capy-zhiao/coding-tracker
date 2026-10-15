@@ -49,11 +49,15 @@ export default function Layout({ children }: { children: ReactNode }) {
               {l.label}
             </NavLink>
           ))}
+          <NavLink to="/settings" title="Settings" aria-label="Settings"
+                   className="ml-auto text-lg px-2 rounded-lg hover:bg-slate-100">
+            ⚙️
+          </NavLink>
           <button
             onClick={() => setTheme(next)}
             title={`Switch to ${next} mode`}
             aria-label={`Switch to ${next} mode`}
-            className="ml-auto text-lg px-2 rounded-lg hover:bg-slate-100"
+            className="text-lg px-2 rounded-lg hover:bg-slate-100"
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>

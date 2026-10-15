@@ -2,6 +2,7 @@
 github mode: GitHub OAuth and a signed session cookie (GitHub's two calls are stubbed)."""
 import pytest
 
+from app import llm
 from app.auth import github
 from app.auth.session import SESSION_COOKIE, STATE_COOKIE
 from app.config import settings
@@ -112,9 +113,16 @@ def test_signing_in_again_reuses_the_account_even_after_a_rename(github_mode, cl
 
 def test_the_owner_is_recognised_by_login(github_mode, client, monkeypatch):
     monkeypatch.setattr(settings, "owner_github_login", "Capy-Zhiao")
+    monkeypatch.setattr(llm, "get_provider", lambda: object())     # the server has a key
     sign_in(client)
     me = client.get("/auth/me").json()
     assert me["is_owner"] and me["ai_enabled"]
+
+
+def test_the_servers_ai_is_only_for_the_owner(github_mode, client, monkeypatch):
+    monkeypatch.setattr(llm, "get_provider", lambda: object())
+    sign_in(client)                                   # not the owner: OWNER_GITHUB_LOGIN is ""
+    assert client.get("/auth/me").json()["ai_enabled"] is False
 
 
 def test_a_callback_with_the_wrong_state_is_refused(github_mode, client):

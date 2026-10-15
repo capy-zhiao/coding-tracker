@@ -8,7 +8,7 @@ import pytest
 
 from app import llm
 from app.config import settings
-from app.llm import ComplexityVerdict, DeepSeekProvider, extract_json
+from app.llm import ComplexityVerdict, DeepSeekProvider, extract_json, server_config
 
 
 # ---------------------------------------------------------------- reply parsing
@@ -39,8 +39,10 @@ class FakeCompletions:
 
 
 def make_provider(monkeypatch, content):
+    """The server's own provider, built from settings the way the app builds it."""
+    monkeypatch.setattr(settings, "llm_provider", "deepseek")
     monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
-    provider = DeepSeekProvider()
+    provider = DeepSeekProvider(server_config())
     fake = FakeCompletions(content)
     provider._client = SimpleNamespace(chat=SimpleNamespace(completions=fake))
     return provider, fake

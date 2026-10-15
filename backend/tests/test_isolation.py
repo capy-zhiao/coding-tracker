@@ -6,11 +6,13 @@ overriding get_current_user, the single place a request's owner is decided.
 """
 import pytest
 
-from app import llm
 from app.deps import get_current_user, local_user
 from app.main import app
 from app.models import InterviewQA, Problem, ReviewState, User
 
+# Bob brings his own key (Anthropic: no base URL to look up), so his AI requests get past
+# the AI check and reach the ownership check.
+BOB_KEY = {"X-LLM-Provider": "anthropic", "X-LLM-Key": "sk-bob", "X-LLM-Model": "claude-test"}
 ATTEMPT = {"grade": "good", "seconds": 600, "code": "def solve(): return 1",
            "time_complexity": "O(n)", "space_complexity": "O(1)"}
 
@@ -90,26 +92,24 @@ def test_template_drills_are_per_user(client, as_user, alice, bob):
     assert client.get("/templates").json()[0]["state"] is None
 
 
-def test_someone_elses_attempt_answers_404(client, as_user, alice, bob, monkeypatch):
-    monkeypatch.setattr(llm, "is_enabled", lambda: True)
+def test_someone_elses_attempt_answers_404(client, as_user, alice, bob):
     as_user(alice)
     attempt_id = client.post("/review/1/attempt", json=ATTEMPT).json()["attempt"]["id"]
     as_user(bob)
-    r = client.post(f"/review/attempts/{attempt_id}/complexity-ai")
+    r = client.post(f"/review/attempts/{attempt_id}/complexity-ai", headers=BOB_KEY)
     assert r.status_code == 404
     # Same answer as an id that doesn't exist, so ids can't be probed
-    assert client.post("/review/attempts/99999/complexity-ai").json()["detail"].startswith("No attempt")
+    missing = client.post("/review/attempts/99999/complexity-ai", headers=BOB_KEY)
+    assert missing.json()["detail"].startswith("No attempt")
 
 
-def test_someone_elses_interview_question_answers_404(client, as_user, alice, bob,
-                                                      db_session, monkeypatch):
-    monkeypatch.setattr(llm, "is_enabled", lambda: True)
+def test_someone_elses_interview_question_answers_404(client, as_user, alice, bob, db_session):
     problem = db_session.query(Problem).filter_by(number=1).one()
     qa = InterviewQA(user_id=alice.id, problem_id=problem.id, code="x", question="Why?")
     db_session.add(qa)
     db_session.commit()
     as_user(bob)
-    r = client.post(f"/mock/qa/{qa.id}/answer", json={"answer": "Because."})
+    r = client.post(f"/mock/qa/{qa.id}/answer", json={"answer": "Because."}, headers=BOB_KEY)
     assert r.status_code == 404
 
 

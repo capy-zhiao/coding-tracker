@@ -20,7 +20,7 @@ class MeOut(BaseModel):
     provider: str
     is_owner: bool
     is_demo: bool
-    ai_enabled: bool
+    ai_enabled: bool    # the server's own key is available to this user (the owner only)
     timezone: str | None
     daily_review_cap: int
     daily_new_cap: int

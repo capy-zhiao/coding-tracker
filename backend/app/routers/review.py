@@ -9,7 +9,8 @@ from .. import llm
 from ..complexity import COMPLEXITY_CHOICES, EXPECTED, check as check_complexity
 from ..database import get_db
 from ..deps import (
-    effective_caps, ensure_state, get_current_user, get_problem, notes_for, user_today,
+    ai_provider, effective_caps, ensure_state, get_current_user, get_problem, notes_for,
+    user_today,
 )
 from ..models import Attempt, Problem, User
 from ..schemas import (
@@ -160,6 +161,7 @@ def ai_complexity(
     attempt_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    provider: llm._Provider = Depends(ai_provider),
 ):
     """Have the LLM judge the stated complexity against the code actually submitted.
 
@@ -167,8 +169,6 @@ def ai_complexity(
     must not hold up recording the attempt. The verdict is stored on the attempt and, since
     it judges the real code rather than the textbook solution, decides complexity_ok.
     """
-    if not llm.is_enabled():
-        raise HTTPException(503, "AI features are off — set LLM_PROVIDER and a key in backend/.env")
     attempt = db.get(Attempt, attempt_id)
     # Someone else's attempt answers exactly like a missing one, so ids can't be probed
     if attempt is None or attempt.user_id != user.id:
@@ -181,6 +181,7 @@ def ai_complexity(
         problem.title, problem.number, attempt.code,
         attempt.time_complexity, attempt.space_complexity,
         EXPECTED.get(problem.number),
+        provider=provider,
     )
     if verdict is None:
         raise HTTPException(502, "The AI call failed — the backend log has the reason")
@@ -191,7 +192,7 @@ def ai_complexity(
         **verdict.model_dump(),
         "optimized_code": code,          # validated, or "" when not worth showing
         "optimized_diff": diff,          # unified diff against the submitted code
-        "model": llm.model_name("complexity"),
+        "model": llm.model_name("complexity", provider),
     }
     attempt.complexity_ok = verdict.time_correct and verdict.space_correct
     db.commit()

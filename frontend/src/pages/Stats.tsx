@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import ProblemListRow from '../components/ProblemListRow'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import type { ChapterStat, Credit, Problem, Stats as StatsT } from '../lib/types'
 
 export default function Stats() {
@@ -129,9 +130,11 @@ function ChapterLibrary({ chapters }: { chapters: ChapterStat[] }) {
   )
 }
 
-/** Remaining API credit. Hidden entirely when no AI provider is configured. */
+/** Remaining credit on the server's AI account. Only its owner sees it, and only when the
+ *  server has a key. */
 function CreditCard() {
-  const [enabled, setEnabled] = useState(false)
+  const { me } = useAuth()
+  const enabled = Boolean(me?.is_owner && me.ai_enabled)
   const [c, setC] = useState<Credit | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -145,11 +148,8 @@ function CreditCard() {
   }
 
   useEffect(() => {
-    api.health().then((h) => {
-      setEnabled(h.llm_enabled)
-      if (h.llm_enabled) load()
-    }).catch(() => {})
-  }, [])
+    if (enabled) load()
+  }, [enabled])
 
   if (!enabled) return null
   const sym = c?.currency === 'CNY' ? '¥' : '$'

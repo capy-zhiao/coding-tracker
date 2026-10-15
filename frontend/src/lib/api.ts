@@ -6,6 +6,7 @@ import type {
   ComplexityStats, DailyQueue, FollowUp, InterviewQuestion, Me, MockStart,
   PatternStat, Problem, ProblemDetail, Stats, TemplateSummary,
 } from './types'
+import { aiHeaders } from './aiKey'
 
 // vite.config.ts proxies /api/* to http://localhost:8000/* during development
 const BASE = '/api'
@@ -65,7 +66,8 @@ export const api = {
   complexityChoices: () => request<string[]>('/review/complexity-choices'),
   // Slow on purpose-built models with thinking on (can take tens of seconds)
   aiComplexity: (attemptId: number) =>
-    request<Attempt>(`/review/attempts/${attemptId}/complexity-ai`, { method: 'POST' }),
+    request<Attempt>(`/review/attempts/${attemptId}/complexity-ai`,
+                     { method: 'POST', headers: aiHeaders() }),
 
   // --- problem library ---
   problems: (f?: { chapter?: number; difficulty?: string; status?: string; q?: string;
@@ -93,16 +95,17 @@ export const api = {
 
   // --- mock interview ---
   mockStart: (f?: { difficulty?: string; chapter?: number; only_solved?: boolean }) =>
-    request<MockStart>(`/mock/start${qs(f ?? {})}`, { method: 'POST' }),
+    request<MockStart>(`/mock/start${qs(f ?? {})}`, { method: 'POST', headers: aiHeaders() }),
   followups: (number: number, regenerate = false) =>
-    request<FollowUp[]>(`/mock/${number}/followups${qs({ regenerate })}`),
+    request<FollowUp[]>(`/mock/${number}/followups${qs({ regenerate })}`,
+                        { headers: aiHeaders() }),
   // Questions about the code written in this session; answers graded one by one
   startInterview: (number: number, body: { code: string; time_complexity: string; space_complexity: string }) =>
     request<InterviewQuestion[]>(`/mock/${number}/interview`, {
-      method: 'POST', body: JSON.stringify(body),
+      method: 'POST', body: JSON.stringify(body), headers: aiHeaders(),
     }),
   answerQuestion: (qaId: number, answer: string) =>
     request<AnswerGrade>(`/mock/qa/${qaId}/answer`, {
-      method: 'POST', body: JSON.stringify({ answer }),
+      method: 'POST', body: JSON.stringify({ answer }), headers: aiHeaders(),
     }),
 }

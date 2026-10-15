@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import credit, llm
 from ..complexity import EXPECTED, check as check_complexity
 from ..database import get_db
-from ..deps import get_current_user, local_date, states_for, user_today
+from ..deps import get_current_user, local_date, require_owner, states_for, user_today
 from ..models import Attempt, Problem, User
 from ..patterns import PATTERN_TEMPLATE, PATTERNS, describe, label, patterns_for
 from ..schemas import ChapterStat, ComplexityStat, PatternStat, StatsOut
@@ -204,9 +204,10 @@ def complexity_accuracy(db: Session = Depends(get_db), user: User = Depends(get_
     )
 
 
-@router.get("/credit")
+@router.get("/credit", dependencies=[Depends(require_owner)])
 def api_credit(refresh: bool = False):
-    """Remaining credit on the LLM provider's account (cached for a minute)."""
+    """Remaining credit on the server's LLM account (cached for a minute). The owner's
+    account, so only the owner sees it."""
     if not llm.is_enabled():
         raise HTTPException(503, "AI features are off")
     result = credit.fetch_credit(force=refresh)

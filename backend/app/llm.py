@@ -7,6 +7,11 @@ Two providers are supported and selected with LLM_PROVIDER:
   deepseek  — DeepSeek via its OpenAI-compatible API. Roughly 30x cheaper; JSON mode plus
               manual Pydantic validation, since it has no strict-schema equivalent.
 
+Whose key: the server's own (LLM_PROVIDER and its key in .env) serves the owner — in local
+mode that's the one local user. Anyone else brings their own key; it arrives with each
+request (see config_from_headers) and is used for that request only, never stored, cached
+or logged.
+
 Design principle: **graceful degradation**. With LLM_PROVIDER=none (or a missing key) these
 functions return empty results and the rest of the app keeps working — no hard dependency.
 """
@@ -14,10 +19,15 @@ from __future__ import annotations
 
 import ast
 import difflib
+import ipaddress
 import json
 import logging
 import re
+import socket
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TypeVar
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -197,6 +207,97 @@ def describe_fields(schema: type[BaseModel]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- configuration
+@dataclass(frozen=True)
+class LLMConfig:
+    """Everything a provider needs. Built from .env for the server's key, or from request
+    headers for a user's own key."""
+    provider: str                       # "deepseek" (any OpenAI-compatible API) | "anthropic"
+    api_key: str = field(repr=False)    # never in a repr, so never in a log line
+    model: str
+    base_url: str = ""
+    complexity_model: str = ""          # optional cheaper model for complexity checks
+    thinking: bool | None = None        # None: send no thinking parameters at all
+    reasoning_effort: str = ""
+    complexity_effort: str = ""
+    timeout: int = 300
+
+
+def server_config() -> LLMConfig | None:
+    """The server's own key from .env, or None when it has none."""
+    choice = settings.llm_provider.strip().lower()
+    if choice == "anthropic" and settings.anthropic_api_key:
+        return LLMConfig("anthropic", settings.anthropic_api_key, settings.anthropic_model,
+                         timeout=settings.llm_timeout_seconds)
+    if choice == "deepseek" and settings.deepseek_api_key:
+        return LLMConfig(
+            "deepseek", settings.deepseek_api_key, settings.deepseek_model,
+            base_url=settings.deepseek_base_url,
+            complexity_model=settings.deepseek_complexity_model,
+            thinking=settings.deepseek_thinking,
+            reasoning_effort=settings.deepseek_reasoning_effort,
+            complexity_effort=settings.deepseek_complexity_effort,
+            timeout=settings.llm_timeout_seconds,
+        )
+    return None
+
+
+# Request headers that carry a user's own key. The browser keeps the key and sends it only
+# with AI requests; this server forwards it to the provider and forgets it.
+HEADER_PROVIDER = "x-llm-provider"      # "openai" (any OpenAI-compatible API) | "anthropic"
+HEADER_KEY = "x-llm-key"
+HEADER_BASE_URL = "x-llm-base-url"
+HEADER_MODEL = "x-llm-model"
+DEFAULT_OPENAI_BASE_URL = "https://api.deepseek.com"
+
+
+class BadKeyConfig(ValueError):
+    """The user's AI settings can't be used as sent; the message says what to fix."""
+
+
+def config_from_headers(headers: Mapping[str, str]) -> LLMConfig | None:
+    """The caller's own provider settings, or None if the request carries no key."""
+    key = (headers.get(HEADER_KEY) or "").strip()
+    if not key:
+        return None
+    if len(key) > 500:
+        raise BadKeyConfig("That API key is too long to be real")
+    kind = (headers.get(HEADER_PROVIDER) or "openai").strip().lower()
+    model = (headers.get(HEADER_MODEL) or "").strip()
+    if not model:
+        raise BadKeyConfig("Choose a model in Settings")
+    if kind == "anthropic":
+        return LLMConfig("anthropic", key, model, timeout=settings.llm_timeout_seconds)
+    if kind != "openai":
+        raise BadKeyConfig("Provider must be OpenAI-compatible or Anthropic")
+    base_url = check_base_url((headers.get(HEADER_BASE_URL) or DEFAULT_OPENAI_BASE_URL).strip())
+    # Other vendors reject DeepSeek's thinking parameters, so none are sent for user keys.
+    return LLMConfig("deepseek", key, model, base_url=base_url,
+                     timeout=settings.llm_timeout_seconds)
+
+
+def check_base_url(url: str) -> str:
+    """Accept only https URLs whose host resolves to public addresses.
+
+    The server makes the request, so without this a user-supplied URL could point it at
+    something only the server can reach: localhost, the private network, or the cloud
+    metadata endpoint (169.254.169.254). A host that resolves differently later (DNS
+    rebinding) could still slip past; the EC2 metadata service also requires IMDSv2's
+    PUT-issued token, which this client never sends.
+    """
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        raise BadKeyConfig("The base URL must start with https://")
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 443, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, UnicodeError) as e:
+        raise BadKeyConfig(f"Can't find the host {parts.hostname}") from e
+    for info in infos:
+        if not ipaddress.ip_address(info[4][0]).is_global:
+            raise BadKeyConfig("The base URL must point at a public address")
+    return url.rstrip("/")
+
+
 # ---------------------------------------------------------------- providers
 class _Provider:
     """Common interface so the rest of the app never cares which vendor is behind it."""
@@ -215,14 +316,15 @@ class _Provider:
 class AnthropicProvider(_Provider):
     name = "anthropic"
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: LLMConfig) -> None:
         import anthropic
 
+        self.cfg = cfg
         self._anthropic = anthropic
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.Anthropic(api_key=cfg.api_key, timeout=cfg.timeout)
 
     def model_for(self, task: str = "default") -> str:
-        return settings.anthropic_model
+        return self.cfg.model
 
     def complete(self, prompt: str, schema: type[T], task: str = "default") -> T | None:
         a = self._anthropic
@@ -255,39 +357,39 @@ class DeepSeekProvider(_Provider):
 
     name = "deepseek"
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: LLMConfig) -> None:
         import openai
 
+        self.cfg = cfg
         self._openai = openai
-        self._client = openai.OpenAI(
-            api_key=settings.deepseek_api_key,
-            base_url=settings.deepseek_base_url,
-            timeout=settings.llm_timeout_seconds,
-        )
+        self._client = openai.OpenAI(api_key=cfg.api_key, base_url=cfg.base_url,
+                                     timeout=cfg.timeout)
 
-    @staticmethod
-    def request_options(task: str = "default") -> dict:
+    def request_options(self, task: str = "default") -> dict:
         """Thinking-mode parameters. They go in extra_body, which the SDK merges into the
         top level of the request JSON — reasoning_effort's values (low/high/max) are
         DeepSeek's own, so they are kept out of the SDK's typed arguments."""
-        if settings.deepseek_thinking:
+        cfg = self.cfg
+        if cfg.thinking is None:            # a user's own endpoint: send nothing extra
+            return {"max_tokens": 16000}
+        if cfg.thinking:
             return {
                 "max_tokens": 16000,   # reasoning tokens count towards the limit
                 "extra_body": {
                     "thinking": {"type": "enabled"},
                     "reasoning_effort": (
-                        settings.deepseek_complexity_effort
-                        if task == "complexity" and settings.deepseek_complexity_effort
-                        else settings.deepseek_reasoning_effort
+                        cfg.complexity_effort
+                        if task == "complexity" and cfg.complexity_effort
+                        else cfg.reasoning_effort
                     ),
                 },
             }
         return {"max_tokens": 4000, "extra_body": {"thinking": {"type": "disabled"}}}
 
     def model_for(self, task: str = "default") -> str:
-        if task == "complexity" and settings.deepseek_complexity_model:
-            return settings.deepseek_complexity_model
-        return settings.deepseek_model
+        if task == "complexity" and self.cfg.complexity_model:
+            return self.cfg.complexity_model
+        return self.cfg.model
 
     def complete(self, prompt: str, schema: type[T], task: str = "default") -> T | None:
         o = self._openai
@@ -342,26 +444,24 @@ class DeepSeekProvider(_Provider):
         return parsed
 
 
+def build_provider(cfg: LLMConfig) -> _Provider | None:
+    try:
+        return AnthropicProvider(cfg) if cfg.provider == "anthropic" else DeepSeekProvider(cfg)
+    except ImportError as e:
+        log.warning("LLM provider %r unavailable: %s", cfg.provider, e)
+        return None
+
+
 _cached: _Provider | None = None
 
 
 def get_provider() -> _Provider | None:
-    """Build (and memoise) the configured provider, or None if AI features are off."""
+    """The server's own provider (memoised), or None if it has no key. Providers built
+    from a user's key are never stored here: they live for one request."""
     global _cached
-    if _cached is not None:
-        return _cached
-
-    choice = settings.llm_provider.strip().lower()
-    try:
-        if choice == "anthropic" and settings.anthropic_api_key:
-            _cached = AnthropicProvider()
-        elif choice == "deepseek" and settings.deepseek_api_key:
-            _cached = DeepSeekProvider()
-        else:
-            return None
-    except ImportError as e:
-        log.warning("LLM provider %r unavailable: %s", choice, e)
-        return None
+    if _cached is None:
+        cfg = server_config()
+        _cached = build_provider(cfg) if cfg else None
     return _cached
 
 
@@ -374,19 +474,20 @@ def provider_name() -> str:
     return p.name if p else "none"
 
 
-def model_name(task: str = "default") -> str:
+def model_name(task: str = "default", provider: _Provider | None = None) -> str:
     """Which model a task runs on — stored with results so a verdict says who judged it."""
-    p = get_provider()
+    p = provider or get_provider()
     return p.model_for(task) if p else ""
 
 
 # ---------------------------------------------------------------- public API
 def generate_followups(
-    title: str, number: int, difficulty: str, chapter: str, n: int = 3
+    title: str, number: int, difficulty: str, chapter: str, n: int = 3,
+    provider: _Provider | None = None,
 ) -> list[FollowUpItem]:
     """Generate interviewer follow-ups for one problem. Results are cached in the DB,
     so each problem costs exactly one API call for its lifetime."""
-    provider = get_provider()
+    provider = provider or get_provider()
     if provider is None:
         return []
 
@@ -415,6 +516,7 @@ def analyze_complexity(
     stated_time: str,
     stated_space: str,
     reference: tuple[list[str], list[str]] | None = None,
+    provider: _Provider | None = None,
 ) -> ComplexityVerdict | None:
     """Judge the candidate's stated complexity against the code they actually wrote.
 
@@ -423,7 +525,7 @@ def analyze_complexity(
     code itself, and separately whether it is optimal. The table's answer is passed along
     as a hint, not as the answer key.
     """
-    provider = get_provider()
+    provider = provider or get_provider()
     if provider is None or not code.strip():
         return None
 
@@ -520,6 +622,7 @@ def optimized_patch(user_code: str, optimized: str) -> tuple[str, list[str]]:
 def interview_followups(
     title: str, number: int, difficulty: str, code: str,
     stated_time: str = "", stated_space: str = "", n: int = 3,
+    provider: _Provider | None = None,
 ) -> list[FollowUpItem]:
     """Follow-up questions about the code the candidate just wrote.
 
@@ -527,7 +630,7 @@ def interview_followups(
     are specific to one submission, the way a real interviewer reacts to what is on the
     screen: the recursion depth of this DFS, the extra array this DP allocates.
     """
-    provider = get_provider()
+    provider = provider or get_provider()
     if provider is None or not code.strip():
         return []
 
@@ -560,9 +663,10 @@ Ask the {n} follow-up questions you would ask about THIS code in a real intervie
 
 def grade_answer(
     title: str, number: int, code: str, question: str, key_points: str, answer: str,
+    provider: _Provider | None = None,
 ) -> AnswerGrade | None:
     """Grade a candidate's written answer to one follow-up question."""
-    provider = get_provider()
+    provider = provider or get_provider()
     if provider is None or not answer.strip():
         return None
 

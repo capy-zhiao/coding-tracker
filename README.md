@@ -196,6 +196,14 @@ With `LLM_PROVIDER=none` everything else still works, and complexity answers are
 against a built-in answer table instead. When a provider is set, the Stats page shows how
 much API credit is left.
 
+That key is the owner's: in local mode, you; with `AUTH_MODE=github`, the account named
+by `OWNER_GITHUB_LOGIN`. Everyone else adds their own key under Settings (any
+OpenAI-compatible API, or Anthropic). It stays in their browser and is sent only with AI
+requests; the server passes it to the provider for that request and never stores or logs
+it. A custom base URL must be https and resolve to a public address, so a key can't be
+used to make the server call something on its own network. AI requests on a user's key
+are rate limited per user.
+
 ## How scheduling works
 
 After each attempt you pick a grade: again, hard, good or easy. The app suggests one from

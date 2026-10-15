@@ -11,6 +11,7 @@ import Drill from './pages/Drill'
 import Patterns from './pages/Patterns'
 import Mock from './pages/Mock'
 import Stats from './pages/Stats'
+import Settings from './pages/Settings'
 
 export default function App() {
   const { status } = useAuth()
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/patterns" element={<Patterns />} />
         <Route path="/mock" element={<Mock />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   )

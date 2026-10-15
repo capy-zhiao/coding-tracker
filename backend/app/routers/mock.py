@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from .. import llm
 from ..database import get_db
-from ..deps import get_current_user, get_problem, notes_for, states_for
+from ..deps import (
+    ai_provider, get_current_user, get_problem, notes_for, optional_ai_provider, states_for,
+)
 from ..models import FollowUp, InterviewQA, Problem, User
 from ..schemas import (
     AnswerGradeOut, AnswerIn, FollowUpOut, InterviewQuestionOut,
@@ -41,6 +43,7 @@ GENERIC_FOLLOWUPS = [
 def start_mock(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    provider: llm._Provider | None = Depends(optional_ai_provider),
     difficulty: str | None = Query(None, description="Restrict to a difficulty"),
     chapter: int | None = Query(None, description="Restrict to a chapter"),
     only_solved: bool = Query(False, description="Only draw problems you have solved before"),
@@ -63,7 +66,7 @@ def start_mock(
     return MockStartOut(
         problem=ProblemDetail.of(p, states.get(p.id), notes_for(db, user.id, p.id)),
         minutes=DEFAULT_MINUTES.get(p.difficulty, 35),
-        followups_ready=bool(p.followups) or llm.is_enabled(),
+        followups_ready=bool(p.followups) or provider is not None,
     )
 
 
@@ -71,24 +74,29 @@ def start_mock(
 def get_followups(
     problem: Problem = Depends(get_problem),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    provider: llm._Provider | None = Depends(optional_ai_provider),
     regenerate: bool = Query(False),
 ):
-    """Fetch follow-ups for a problem, generating and caching them on first request."""
+    """Follow-ups for a problem. They're about the problem, not anyone's code, so they're
+    generated once and shared by everyone; only the owner can regenerate them."""
+    if regenerate and not user.is_owner:
+        raise HTTPException(403, "Only the owner can regenerate the shared questions")
     if problem.followups and not regenerate:
         return problem.followups
+
+    items = llm.generate_followups(
+        problem.title, problem.number, problem.difficulty, problem.chapter, provider=provider,
+    ) if provider is not None else []
+    if not items:
+        # No AI for this user, or the call failed: generic questions keep the interview
+        # going, but they aren't cached, so the next AI-enabled request still generates.
+        return [FollowUpOut(id=0, question=q, hint=h) for q, h in GENERIC_FOLLOWUPS]
 
     if regenerate:
         for f in problem.followups:
             db.delete(f)
         db.flush()
-
-    items = llm.generate_followups(
-        problem.title, problem.number, problem.difficulty, problem.chapter
-    )
-    if not items:
-        # No provider configured, or the call failed — fall back so the flow never breaks
-        items = [llm.FollowUpItem(question=q, hint=h) for q, h in GENERIC_FOLLOWUPS]
-
     rows = [FollowUp(problem_id=problem.id, question=i.question, hint=i.hint) for i in items]
     db.add_all(rows)
     db.commit()
@@ -103,20 +111,19 @@ def start_code_interview(
     problem: Problem = Depends(get_problem),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    provider: llm._Provider = Depends(ai_provider),
 ):
     """Generate follow-up questions about the code written in this session.
 
     Key points are stored but not returned: they are revealed with the grade, so they
     cannot be read before answering.
     """
-    if not llm.is_enabled():
-        raise HTTPException(503, "AI interviews need LLM_PROVIDER and a key in backend/.env")
     if not payload.code.strip():
         raise HTTPException(400, "Write some code first — the questions are about your code")
 
     items = llm.interview_followups(
         problem.title, problem.number, problem.difficulty, payload.code,
-        payload.time_complexity, payload.space_complexity,
+        payload.time_complexity, payload.space_complexity, provider=provider,
     )
     if not items:
         raise HTTPException(502, "The AI call failed — the backend log has the reason")
@@ -137,10 +144,9 @@ def answer_question(
     payload: AnswerIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    provider: llm._Provider = Depends(ai_provider),
 ):
     """Grade a written answer. Answering again replaces the previous answer and grade."""
-    if not llm.is_enabled():
-        raise HTTPException(503, "AI grading needs LLM_PROVIDER and a key in backend/.env")
     qa = db.get(InterviewQA, qa_id)
     if qa is None or qa.user_id != user.id:      # someone else's looks like a missing one
         raise HTTPException(404, f"No interview question {qa_id}")
@@ -150,6 +156,7 @@ def answer_question(
     problem = qa.problem
     grade = llm.grade_answer(
         problem.title, problem.number, qa.code, qa.question, qa.key_points, payload.answer,
+        provider=provider,
     )
     if grade is None:
         raise HTTPException(502, "The AI call failed — the backend log has the reason")

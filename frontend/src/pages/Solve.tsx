@@ -10,6 +10,7 @@ import ComplexityPicker from '../components/ComplexityPicker'
 import GradeBar from '../components/GradeBar'
 import PatternChips from '../components/PatternChips'
 import Timer, { formatTime, useTimer } from '../components/Timer'
+import { useAiAvailable } from '../lib/aiKey'
 import { api } from '../lib/api'
 import { useHotkeys } from '../lib/useHotkeys'
 import type {
@@ -45,7 +46,7 @@ export default function Solve() {
   // contradicted a minute later. It is only a fallback if the AI call fails.
   const [tableCheck, setTableCheck] = useState<ComplexityCheck | null>(null)
   // AI complexity check: runs after submitting, because thinking mode is slow
-  const [aiEnabled, setAiEnabled] = useState(false)
+  const aiEnabled = useAiAvailable()
   const [aiVerdict, setAiVerdict] = useState<ComplexityVerdict | null>(null)
   const [aiState, setAiState] = useState<'idle' | 'running' | 'failed'>('idle')
   const [aiError, setAiError] = useState('')
@@ -66,7 +67,6 @@ export default function Solve() {
 
   useEffect(() => {
     api.complexityChoices().then(setChoices).catch(() => {})
-    api.health().then((h) => setAiEnabled(h.llm_enabled)).catch(() => {})
   }, [])
 
   // Stopping the timer asks the backend which grade the performance deserves

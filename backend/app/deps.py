@@ -1,4 +1,6 @@
 """Shared dependencies and small helpers."""
+import time
+from collections import defaultdict, deque
 from datetime import date, datetime, timezone
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -8,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from . import llm
 from .auth.session import read_session
 from .config import settings
 from .database import get_db
@@ -65,6 +68,57 @@ def local_user(db: Session) -> User:
         db.rollback()
         return db.scalar(query)
     return user
+
+
+# ---------------------------------------------------------------- AI access
+# Requests on a user's own key are their money, but each one can hold a server thread for
+# minutes, so they're rate limited per user. Kept in memory: there is one server process.
+AI_WINDOW_SECONDS = 600
+AI_MAX_PER_WINDOW = 30
+_ai_calls: dict[int, deque[float]] = defaultdict(deque)
+
+
+def _rate_limit(user_id: int) -> None:
+    now = time.monotonic()
+    calls = _ai_calls[user_id]
+    while calls and now - calls[0] > AI_WINDOW_SECONDS:
+        calls.popleft()
+    if len(calls) >= AI_MAX_PER_WINDOW:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "Too many AI requests - wait a few minutes")
+    calls.append(now)
+
+
+def _resolve_ai(request: Request, user: User) -> "llm._Provider | None":
+    """The caller's own key if the request carries one; otherwise the server's key, which
+    only the owner may use (in local mode the one local user is the owner)."""
+    try:
+        cfg = llm.config_from_headers(request.headers)
+    except llm.BadKeyConfig as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    if cfg is not None:
+        _rate_limit(user.id)
+        return llm.build_provider(cfg)
+    return llm.get_provider() if user.is_owner else None
+
+
+def ai_provider(request: Request, user: User = Depends(get_current_user)) -> "llm._Provider":
+    """For routes that can't work without AI."""
+    provider = _resolve_ai(request, user)
+    if provider is None:
+        if user.is_owner:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                                "AI features are off - set LLM_PROVIDER and a key in backend/.env")
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Add your own API key in Settings to use AI features")
+    return provider
+
+
+def optional_ai_provider(
+    request: Request, user: User = Depends(get_current_user),
+) -> "llm._Provider | None":
+    """For routes with a non-AI fallback."""
+    return _resolve_ai(request, user)
 
 
 def require_owner(user: User = Depends(get_current_user)) -> User:

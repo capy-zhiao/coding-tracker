@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import llm
 from ..auth import github
 from ..auth.session import STATE_COOKIE, clear_session, secure_cookies, set_session
 from ..config import settings
@@ -28,7 +29,8 @@ def me(user: User = Depends(get_current_user)):
     return MeOut(
         id=user.id, login=user.login, display_name=user.display_name,
         avatar_url=user.avatar_url, provider=user.provider, is_owner=user.is_owner,
-        is_demo=user.is_demo, ai_enabled=user.ai_enabled, timezone=user.timezone,
+        is_demo=user.is_demo, ai_enabled=user.is_owner and llm.is_enabled(),
+        timezone=user.timezone,
         daily_review_cap=review_cap, daily_new_cap=new_cap,
         auth_mode=settings.auth_mode, today=user_today(user),
     )

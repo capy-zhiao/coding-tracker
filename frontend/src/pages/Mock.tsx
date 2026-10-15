@@ -3,10 +3,11 @@
 // With an LLM configured and code written, the follow-ups are about THAT code, and each
 // written answer is graded. Otherwise it falls back to per-problem questions with key
 // points to self-check against.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import CodeEditor from '../components/CodeEditor'
 import Timer, { useTimer } from '../components/Timer'
+import { useAiAvailable } from '../lib/aiKey'
 import { api } from '../lib/api'
 import type { AnswerGrade, FollowUp, InterviewQuestion, MockStart } from '../lib/types'
 
@@ -22,12 +23,11 @@ export default function Mock() {
   const [timeComplexity, setTimeComplexity] = useState('')
   const [spaceComplexity, setSpaceComplexity] = useState('')
   const [loading, setLoading] = useState(false)
-  const [aiEnabled, setAiEnabled] = useState(false)
+  const aiEnabled = useAiAvailable()
   const [questions, setQuestions] = useState<InterviewQuestion[]>([])
   const [interviewNote, setInterviewNote] = useState('')
   const timer = useTimer()
 
-  useEffect(() => { api.health().then((h) => setAiEnabled(h.llm_enabled)).catch(() => {}) }, [])
 
   const start = async () => {
     setLoading(true)
