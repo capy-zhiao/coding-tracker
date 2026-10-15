@@ -1,0 +1,15 @@
+# Build context for backend/Dockerfile is the repository root. Keep secrets, local
+# databases and anything the backend image does not need out of it.
+.git
+.github
+.logs
+**/.DS_Store
+**/.env
+**/*.db
+**/.backups
+**/.venv
+**/__pycache__
+**/.pytest_cache
+frontend
+docs
+scripts

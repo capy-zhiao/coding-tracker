@@ -1,0 +1,47 @@
+# Backend (FastAPI + SQLite on a named volume) and frontend (nginx serving the built app
+# and proxying /api to the backend).
+#   cp .env.example .env      # optional: timezone, LLM provider, daily caps
+#   docker compose up -d --build
+#   open http://localhost:8080
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Always the volume, whatever .env says: a relative SQLite path inside the image
+      # would be lost on the next rebuild.
+      DATABASE_URL: sqlite:////data/tracker.db
+      # TIMEZONE decides the app's "today"; TZ makes seed_db.py's date.today() agree.
+      TIMEZONE: ${TIMEZONE:-}
+      TZ: ${TIMEZONE:-UTC}
+    volumes:
+      - tracker-data:/data
+    # Only on this machine, for the API docs at http://localhost:8000/docs.
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: frontend
+      args:
+        VITE_API_KEY: ${VITE_API_KEY:-}
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tracker-data:

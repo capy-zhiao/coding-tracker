@@ -16,9 +16,25 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-BACKEND = Path(__file__).resolve().parent
-DB = BACKEND / "tracker.db"
-BACKUP_DIR = BACKEND / ".backups"
+from app.config import settings
+
+
+def _sqlite_path(url: str) -> Path | None:
+    """The database file behind a sqlite:/// URL, or None for any other database.
+
+    Relative paths resolve against the working directory, as SQLAlchemy does: start.sh
+    runs this from backend/, so the default sqlite:///./tracker.db is backend/tracker.db.
+    In Docker, DATABASE_URL=sqlite:////data/tracker.db points at the mounted volume.
+    """
+    prefix = "sqlite:///"
+    if not url.startswith(prefix) or url.endswith(":memory:"):
+        return None
+    path = Path(url[len(prefix):])
+    return path if path.is_absolute() else Path.cwd() / path
+
+
+DB = _sqlite_path(settings.database_url)
+BACKUP_DIR = DB.parent / ".backups" if DB else None
 KEEP_BACKUPS = 7
 
 # table -> [(column, SQL type + default)]
@@ -52,6 +68,9 @@ def backup() -> Path | None:
 
 
 def main() -> None:
+    if DB is None:
+        print("DATABASE_URL is not a SQLite file — this script only migrates SQLite; skipping.")
+        return
     if not DB.exists():
         print("No database yet — seed_db.py will create it with the current schema.")
         return

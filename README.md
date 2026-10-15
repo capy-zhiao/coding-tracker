@@ -91,8 +91,9 @@ shortcuts for most actions.
 - Python 3.12+, FastAPI, served with Uvicorn
 - SQLAlchemy 2.0 with SQLite locally and Postgres in production
 - Pydantic v2 for request and response models, pydantic-settings for config from `.env`
-- The spaced-repetition logic and daily queue are plain functions with no database or
-  clock access, so they're tested directly
+- The spaced-repetition rules and the template grader don't touch the database and take
+  the date as a parameter, so they're tested directly; the layer that builds the daily
+  queue reads the database and takes the date as a parameter too
 
 **AI (optional)**
 
@@ -104,7 +105,9 @@ shortcuts for most actions.
 **Testing and CI**
 
 - pytest with FastAPI's test client against an in-memory SQLite database, about 200 tests
-- GitHub Actions runs the tests on Python 3.12 and 3.13 and builds the frontend on every push to main
+- GitHub Actions runs on every push to `main` and every pull request against `main`: the
+  backend tests on Python 3.12 and 3.13, a type-check and production build of the frontend,
+  and a check that the problem set is complete and tagged. It does not deploy anything
 
 ## Running it
 
@@ -132,9 +135,42 @@ npm run dev
 
 Tests: `cd backend && ./.venv/bin/pytest -q`
 
+### With Docker
+
+Needs Docker with Compose v2.24 or newer.
+
+```bash
+cp .env.example .env          # optional: timezone, LLM provider, daily caps
+docker compose up -d --build
+```
+
+Then open http://localhost:8080. Two containers run:
+
+- `backend`: FastAPI on Python 3.12. Each start runs `migrate.py` and `seed_db.py`, the same
+  steps as `start.sh`, so the first start creates and fills the database and later starts
+  only add what's new. The API docs are at http://localhost:8000/docs, reachable from this
+  machine only
+- `web`: nginx serving the built frontend and passing `/api` to the backend, the same
+  mapping as the Vite dev proxy
+
+The SQLite database lives in the `tracker-data` volume, so it survives restarts and
+rebuilds. `migrate.py` keeps its dated backups in the same volume, under `/data/.backups`.
+
+```bash
+docker compose cp backend:/data/tracker.db ./tracker-backup.db   # copy the database out
+docker compose up -d --build                                     # update after git pull
+docker compose down                                              # stop; data is kept
+docker compose down -v                                           # stop AND delete the data
+```
+
+Settings come from `.env` (see `.env.example`). Containers run in UTC, so set `TIMEZONE`,
+or an evening session is filed under the next day. API keys are read at run time and are
+never built into the images. The one exception is `VITE_API_KEY`, which is compiled into
+the frontend's JavaScript; see the deployment notes before using it.
+
 ## AI setup
 
-In `backend/.env`:
+In `backend/.env` (or the root `.env` when running with Docker):
 
 ```bash
 LLM_PROVIDER=deepseek
@@ -189,6 +225,29 @@ link to LeetCode; the rest link to NeetCode.
 
 ## Deploying
 
-Frontend on Vercel (`frontend/`), backend on Railway or Render (`backend/`, Procfile
-included), Postgres through `DATABASE_URL`. If it's public, set `API_KEY` on the backend
-and `VITE_API_KEY` on the frontend.
+Nothing here has been deployed yet; these are the options and what each still needs.
+
+### One server with Docker Compose (for example AWS EC2)
+
+The Docker setup above, tested locally, runs unchanged on a single Linux server:
+
+1. Launch an instance with a recent Ubuntu or Amazon Linux. A small instance is enough
+   (the backend is one process with SQLite). EC2 is billed while the instance runs.
+2. In the security group, allow SSH only from your own IP. Don't open the web port to
+   everyone: the app has no user accounts, and `API_KEY` only helps against people who
+   can't read the page's JavaScript.
+3. Install Docker Engine and the Compose plugin, clone this repository, then
+   `cp .env.example .env`, set `TIMEZONE`, and run `docker compose up -d --build`.
+4. Reach it through an SSH tunnel, `ssh -L 8080:localhost:8080 <user>@<instance>`, then
+   open http://localhost:8080. Alternatively, open port 8080 to your IP only.
+5. Back up `tracker-data` (see the commands above) or snapshot the volume; it holds the
+   only copy of your practice history.
+
+### Vercel + Railway or Render (not verified)
+
+The frontend calls `/api` on its own origin, and `frontend/vercel.json` currently sends
+every path to `index.html`, so a Vercel frontend can't reach a backend elsewhere until
+`vercel.json` also rewrites `/api/(.*)` to the backend's URL. The `Procfile` only starts
+the server: run `python seed_db.py` once against the production database to load the
+problems, and install `psycopg[binary]` for Postgres. If it's public, set `API_KEY` on the
+backend and the same value as `VITE_API_KEY` on the frontend.

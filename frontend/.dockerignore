@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+.vite
+tsconfig.tsbuildinfo
+.DS_Store
