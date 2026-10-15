@@ -137,6 +137,15 @@ npm run dev
 
 Tests: `cd backend && ./.venv/bin/pytest -q`
 
+### Accounts
+
+By default there are no accounts: everything belongs to one local user, which is what
+you want on your own machine. With `AUTH_MODE=github` people sign in with GitHub and each
+gets their own reviews, attempts and notes. The session is a signed, HttpOnly cookie;
+only the public GitHub profile is read and the GitHub token isn't kept. The settings are
+listed in `backend/.env.example`. To try it locally, create a GitHub OAuth app with the
+callback `http://localhost:5173/api/auth/callback/github`.
+
 ### With Docker
 
 Needs Docker with Compose v2.24 or newer.

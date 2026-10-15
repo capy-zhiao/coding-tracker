@@ -4,6 +4,7 @@ Once running, http://localhost:8000/docs serves interactive OpenAPI documentatio
 generated automatically by FastAPI from the type hints.
 """
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,9 +17,28 @@ from .routers import auth, mock, problems, review, stats, templates
 logging.basicConfig(level=logging.INFO)
 
 
+def check_auth_settings() -> None:
+    """Refuse to start half-configured: a github-mode server with a weak or missing
+    session key would hand out forgeable sessions."""
+    if settings.auth_mode not in ("local", "github"):
+        raise RuntimeError(f"AUTH_MODE must be 'local' or 'github', not {settings.auth_mode!r}")
+    if settings.auth_mode == "github":
+        if len(settings.session_secret) < 32:
+            raise RuntimeError("SESSION_SECRET must be at least 32 characters in github mode")
+        if not (settings.github_client_id and settings.github_client_secret):
+            raise RuntimeError("github mode needs GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    check_auth_settings()
+    yield
+
+
 # The schema is not created here: migrate.py runs the Alembic migrations before the app
 # starts (start.sh and the Docker entrypoint both call it).
 app = FastAPI(
+    lifespan=lifespan,
     title="LeetCode Tracker API",
     description="Spaced-repetition tracker for the NeetCode 250",
     version="1.0.0",

@@ -10,6 +10,13 @@ import type {
 // vite.config.ts proxies /api/* to http://localhost:8000/* during development
 const BASE = '/api'
 
+/** A failed request, with its HTTP status so callers can tell "signed out" from "broken". */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
     ...init,
@@ -19,9 +26,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) {
+    // The session ended (expired or signed out elsewhere): the app swaps to the login page
+    if (res.status === 401) window.dispatchEvent(new Event('auth:expired'))
     const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.detail ?? `Request failed (${res.status})`)
+    throw new ApiError(detail.detail ?? `Request failed (${res.status})`, res.status)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
@@ -38,6 +48,7 @@ const qs = (params: Record<string, unknown>) => {
 export const api = {
   health: () => request<{ status: string; llm_enabled: boolean; llm_provider: string }>('/health'),
   me: () => request<Me>('/auth/me'),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
 
   // --- daily queue and attempts ---
   today: (opts?: { review_cap?: number; new_cap?: number; shuffle?: number; skip?: number[] }) =>

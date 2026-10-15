@@ -1,26 +1,54 @@
 """Shared dependencies and small helpers."""
 from datetime import date, datetime, timezone
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .auth.session import read_session
 from .config import settings
 from .database import get_db
 from .models import Problem, ProblemNote, ReviewState, User
 
 
-def get_current_user(db: Session = Depends(get_db)) -> User:
-    """Who is making this request. Every router depends on it.
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """Who is making this request. Every router depends on it, so this is the one place
+    that decides whose data a request can touch.
 
     Local mode has no login: the one local user is created on the first request and every
-    request is theirs.
+    request is theirs. github mode reads the signed session cookie.
     """
     if settings.auth_mode == "local":
         return local_user(db)
-    raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login required")
+    _refuse_cross_site_writes(request)
+    uid = read_session(request)
+    user = db.get(User, uid) if uid is not None else None
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login required")
+    return user
+
+
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _refuse_cross_site_writes(request: Request) -> None:
+    """CSRF guard for cookie sessions. SameSite=Lax already keeps the cookie off cross-site
+    POSTs; this is the second lock: a state-changing request whose Origin isn't this site
+    is refused. Browsers send Origin on every POST, so a request without one isn't a
+    browser riding someone's cookie."""
+    if request.method in SAFE_METHODS:
+        return
+    origin = request.headers.get("origin")
+    if origin and origin.rstrip("/") != _origin(settings.public_base_url):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cross-site request refused")
 
 
 def local_user(db: Session) -> User:

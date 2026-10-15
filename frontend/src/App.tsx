@@ -2,6 +2,8 @@
 // ":number" is a dynamic segment — /solve/994 passes "994" to the Solve page.
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import { useAuth } from './lib/auth'
+import Login from './pages/Login'
 import Today from './pages/Today'
 import Solve from './pages/Solve'
 import Drills from './pages/Drills'
@@ -11,6 +13,10 @@ import Mock from './pages/Mock'
 import Stats from './pages/Stats'
 
 export default function App() {
+  const { status } = useAuth()
+  if (status === 'loading') return null
+  if (status === 'signed-out') return <Login />
+
   return (
     <Layout>
       <Routes>

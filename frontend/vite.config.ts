@@ -7,8 +7,9 @@ export default defineConfig({
     port: 5173,
     // Proxy /api to the backend during development: no full URLs in the
     // frontend code and no CORS preflight to worry about.
+    // API_URL points it at a backend on another port (e.g. a second checkout).
     proxy: {
-      '/api': { target: 'http://localhost:8000', changeOrigin: true,
+      '/api': { target: process.env.API_URL ?? 'http://localhost:8000', changeOrigin: true,
                 rewrite: (p) => p.replace(/^\/api/, '') },
     },
   },

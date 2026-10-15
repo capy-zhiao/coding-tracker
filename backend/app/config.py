@@ -35,6 +35,19 @@ class Settings(BaseSettings):
     # "local": no login; everything belongs to one automatically created user. This is
     # the default and what start.sh runs. "github": sign in with GitHub, one account each.
     auth_mode: str = "local"
+    # The address people open, without a trailing slash. Builds the OAuth callback URL,
+    # decides whether cookies need Secure (https), and is the only Origin allowed to send
+    # state-changing requests.
+    public_base_url: str = "http://localhost:5173"
+    # Signs session cookies. github mode refuses to start unless it's 32+ characters:
+    #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+    session_secret: str = ""
+    session_max_age_days: int = 30
+    # A GitHub OAuth app whose callback is {public_base_url}/api/auth/callback/github
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    # This GitHub account is the owner: it uses the server's LLM key and sees its credit.
+    owner_github_login: str = ""
 
     daily_review_cap: int = 4         # max reviews per day
     daily_new_cap: int = 3            # max new problems per day

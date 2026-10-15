@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import ShortcutHelp from './ShortcutHelp'
+import { useAuth } from '../lib/auth'
 import { setTheme, useTheme } from '../lib/theme'
 import { useHotkeys } from '../lib/useHotkeys'
 
@@ -18,6 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [helpOpen, setHelpOpen] = useState(false)
   const navigate = useNavigate()
   const theme = useTheme()
+  const { me, signOut } = useAuth()
   const next = theme === 'dark' ? 'light' : 'dark'
 
   useHotkeys({
@@ -62,6 +64,16 @@ export default function Layout({ children }: { children: ReactNode }) {
           >
             ⌘ <kbd className="border border-slate-200 rounded px-1 text-xs">?</kbd>
           </button>
+          {/* Signed-in accounts only; the local user has nothing to sign out of */}
+          {me && me.provider !== 'local' && (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+              {me.avatar_url && <img src={me.avatar_url} alt="" className="w-6 h-6 rounded-full" />}
+              <span className="hidden sm:inline text-sm text-slate-600">{me.login}</span>
+              <button onClick={signOut} className="text-sm text-slate-500 hover:text-slate-800 px-1">
+                Sign out
+              </button>
+            </div>
+          )}
         </nav>
       </header>
       <main className="max-w-4xl mx-auto px-4 py-6">{children}</main>
