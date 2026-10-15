@@ -5,6 +5,7 @@ __pycache__/
 *.db
 .backups/
 .env
+backup.env
 .pytest_cache/
 
 # Node

@@ -1,45 +1,96 @@
-# Backend (FastAPI + SQLite on a named volume) and frontend (nginx serving the built app
-# and proxying /api to the backend).
-#   cp .env.example .env      # optional: timezone, LLM provider, daily caps
-#   docker compose up -d --build
-#   open http://localhost:8080
+# The deployed app: Caddy (HTTPS and the frontend) in front of the API, Postgres, and a
+# nightly backup. App settings come from .env, backup credentials from backup.env, which
+# only the backup container reads. See .env.example and backup.env.example.
+#
+#   cp .env.example .env            # then edit
+#   docker compose up -d --build    # http://localhost with the defaults
+#
+# Images are named after GHCR, where CI publishes them: on a server,
+# `docker compose pull && docker compose up -d` updates without building.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: 10m, max-file: "3" }
+
 services:
-  backend:
+  web:
+    build: frontend
+    image: ghcr.io/capy-zhiao/leetcode-tracker-web:${TAG:-latest}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"      # HTTP/3
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - caddy-data:/data                   # certificates: keep them, or Let's Encrypt rate-limits
+      - caddy-config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  api:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    image: ghcr.io/capy-zhiao/leetcode-tracker-api:${TAG:-latest}
     env_file:
       - path: .env
         required: false
     environment:
-      # Always the volume, whatever .env says: a relative SQLite path inside the image
-      # would be lost on the next rebuild.
-      DATABASE_URL: sqlite:////data/tracker.db
-      # TIMEZONE decides the app's "today"; TZ makes seed_db.py's date.today() agree.
-      TIMEZONE: ${TIMEZONE:-}
+      DATABASE_URL: postgresql+psycopg://tracker:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tracker
+      # TIMEZONE decides the app's "today"; TZ makes the seed scripts' dates agree.
       TZ: ${TIMEZONE:-UTC}
-    volumes:
-      - tracker-data:/data
-    # Only on this machine, for the API docs at http://localhost:8000/docs.
-    ports:
-      - "127.0.0.1:8000:8000"
+    # No published port: only Caddy reaches it, over the compose network.
+    depends_on:
+      db: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
+    logging: *logging
 
-  web:
-    build:
-      context: frontend
-    ports:
-      - "${WEB_PORT:-8080}:80"
-    depends_on:
-      backend:
-        condition: service_healthy
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tracker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: tracker
+    command: ["postgres", "-c", "shared_buffers=128MB"]    # a 2 GB machine shares it
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracker -d tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
+    logging: *logging
+
+  backup:
+    build: deploy/backup
+    image: ghcr.io/capy-zhiao/leetcode-tracker-backup:${TAG:-latest}
+    env_file:
+      - path: backup.env
+        required: false
+    environment:
+      PGHOST: db
+      PGUSER: tracker
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: tracker
+    volumes:
+      - backups:/backups
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
 
 volumes:
-  tracker-data:
+  caddy-data:
+  caddy-config:
+  pgdata:
+  backups:

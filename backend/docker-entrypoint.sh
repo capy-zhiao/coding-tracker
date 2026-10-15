@@ -8,4 +8,8 @@ cd /app/backend
 python migrate.py
 python seed_db.py
 python personal_seed.py
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+# One worker: the demo account's daily rebuild runs in-process and must run once.
+# --proxy-headers: Caddy in front sets X-Forwarded-For/Proto; nothing else can reach this
+# port, so trusting any forwarder is safe.
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
+  --proxy-headers --forwarded-allow-ips='*'

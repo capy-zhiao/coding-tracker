@@ -1,5 +1,5 @@
-# Frontend image: build the Vite app with Node, then serve it with nginx, which also
-# proxies /api to the backend (the same mapping as the dev proxy in vite.config.ts).
+# Web image: build the Vite app with Node, then serve it with Caddy, which also proxies
+# /api to the backend and handles HTTPS (see Caddyfile).
 #   docker build -t leetcode-tracker-web frontend
 FROM node:20-alpine AS build
 WORKDIR /src
@@ -8,7 +8,6 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /src/dist /usr/share/nginx/html
-EXPOSE 80
+FROM caddy:2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /src/dist /srv

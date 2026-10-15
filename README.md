@@ -161,30 +161,32 @@ cd backend
 
 ### With Docker
 
-Needs Docker with Compose v2.24 or newer.
+This is the deployed setup, and it runs the same on your machine. Needs Docker with
+Compose v2.24 or newer.
 
 ```bash
-cp .env.example .env          # optional: timezone, LLM provider, daily caps
+cp .env.example .env          # set POSTGRES_PASSWORD at least
 docker compose up -d --build
 ```
 
-Then open http://localhost:8080. Two containers run:
+Then open http://localhost. Four containers run:
 
-- `backend`: FastAPI on Python 3.12. Each start runs `migrate.py` and `seed_db.py`, the same
-  steps as `start.sh`, so the first start creates and fills the database and later starts
-  only add what's new. The API docs are at http://localhost:8000/docs, reachable from this
-  machine only
-- `web`: nginx serving the built frontend and passing `/api` to the backend, the same
-  mapping as the Vite dev proxy
-
-The SQLite database lives in the `tracker-data` volume, so it survives restarts and
-rebuilds. `migrate.py` keeps its dated backups in the same volume, under `/data/.backups`.
+- `web`: Caddy. Serves the built frontend, passes `/api` to the API (the same mapping as
+  the Vite dev proxy), compresses responses and sets security headers. When
+  `SITE_ADDRESS` is a domain it gets and renews the HTTPS certificate by itself
+- `api`: FastAPI on Python 3.12, one worker. Each start runs `migrate.py`, `seed_db.py`
+  and `personal_seed.py`, so the first start creates the schema and loads the problems.
+  Not published on a host port: only Caddy reaches it
+- `db`: Postgres 16, data in the `pgdata` volume
+- `backup`: a `pg_dump` every night, the last three kept in the `backups` volume and each
+  one copied to S3 when `BACKUP_BUCKET` is set in `backup.env`. Only this container reads
+  `backup.env`, so the app never sees the AWS credentials
 
 ```bash
-docker compose cp backend:/data/tracker.db ./tracker-backup.db   # copy the database out
-docker compose up -d --build                                     # update after git pull
-docker compose down                                              # stop; data is kept
-docker compose down -v                                           # stop AND delete the data
+docker compose exec backup backup.sh     # back up now
+docker compose up -d --build             # update after git pull
+docker compose down                      # stop; data is kept
+docker compose down -v                   # stop AND delete the data
 ```
 
 Settings come from `.env` (see `.env.example`). Containers run in UTC, so set `TIMEZONE`,
@@ -256,29 +258,8 @@ link to LeetCode; the rest link to NeetCode.
 
 ## Deploying
 
-Nothing here has been deployed yet; these are the options and what each still needs.
-
-### One server with Docker Compose (for example AWS EC2)
-
-The Docker setup above, tested locally, runs unchanged on a single Linux server:
-
-1. Launch an instance with a recent Ubuntu or Amazon Linux. A small instance is enough
-   (the backend is one process with SQLite). EC2 is billed while the instance runs.
-2. In the security group, allow SSH only from your own IP. Don't open the web port to
-   everyone: in the default local mode there is no login, so anyone who can reach it is
-   using your data.
-3. Install Docker Engine and the Compose plugin, clone this repository, then
-   `cp .env.example .env`, set `TIMEZONE`, and run `docker compose up -d --build`.
-4. Reach it through an SSH tunnel, `ssh -L 8080:localhost:8080 <user>@<instance>`, then
-   open http://localhost:8080. Alternatively, open port 8080 to your IP only.
-5. Back up `tracker-data` (see the commands above) or snapshot the volume; it holds the
-   only copy of your practice history.
-
-### Vercel + Railway or Render (not verified)
-
-The frontend calls `/api` on its own origin, and `frontend/vercel.json` currently sends
-every path to `index.html`, so a Vercel frontend can't reach a backend elsewhere until
-`vercel.json` also rewrites `/api/(.*)` to the backend's URL. The `Procfile` only starts
-the server: run `python seed_db.py` once against the production database to load the
-problems, and install `psycopg[binary]` for Postgres. Don't make it public while it runs
-in local mode, which has no login.
+The Docker setup above, on one small Linux server: an AWS EC2 t4g.small (2 GB, ARM) with
+an Elastic IP and a domain pointing at it. With `SITE_ADDRESS` set to the domain, Caddy
+handles HTTPS, and `AUTH_MODE=github` gives everyone their own account. The step-by-step
+runbook, from the AWS budget alert to restoring a backup, is
+[docs/deploy.md](docs/deploy.md).
