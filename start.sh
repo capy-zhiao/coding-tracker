@@ -39,6 +39,16 @@ if [[ ! -x "$BACKEND/.venv/bin/uvicorn" ]]; then
   "$BACKEND/.venv/bin/pip" install -q -r "$BACKEND/requirements.txt" || { red "Dependency install failed"; exit 1; }
 fi
 
+# A pull can add a dependency; reinstall whenever requirements.txt differs from the last
+# install, instead of only on the very first run.
+REQ_STAMP="$BACKEND/.venv/.requirements.sha"
+REQ_SHA=$(shasum "$BACKEND/requirements.txt" | cut -d' ' -f1)
+if [[ "$(cat "$REQ_STAMP" 2>/dev/null)" != "$REQ_SHA" ]]; then
+  yellow "Python dependencies changed - updating..."
+  "$BACKEND/.venv/bin/pip" install -q -r "$BACKEND/requirements.txt" || { red "Dependency install failed"; exit 1; }
+  echo "$REQ_SHA" > "$REQ_STAMP"
+fi
+
 if [[ ! -d "$FRONTEND/node_modules" ]]; then
   yellow "First run: installing frontend dependencies (this can take a minute)..."
   (cd "$FRONTEND" && npm install --silent) || { red "npm install failed"; exit 1; }
