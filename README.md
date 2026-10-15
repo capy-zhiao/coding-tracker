@@ -105,10 +105,16 @@ shortcuts for most actions.
 
 **Testing and CI**
 
-- pytest with FastAPI's test client against an in-memory SQLite database, about 200 tests
-- GitHub Actions runs on every push to `main` and every pull request against `main`: the
-  backend tests on Python 3.12 and 3.13, a type-check and production build of the frontend,
-  and a check that the problem set is complete and tagged. It does not deploy anything
+- pytest with FastAPI's test client, about 260 tests, against in-memory SQLite and, in CI,
+  Postgres 16. They include per-user isolation (one user's data never reaches another
+  through any route), the migrations against real database files, and sign-in with
+  GitHub's calls stubbed
+- CI on every push and pull request to `main`: the backend tests on Python 3.12 and 3.13
+  and on Postgres, a check that the migrations build exactly the schema the models
+  describe, a type-check and production build of the frontend, and the problem set
+- After CI passes on main, the Deploy workflow builds the images for ARM, pushes them to
+  GHCR and updates the server through AWS Systems Manager (no SSH, no stored AWS keys);
+  a scheduled job checks the site every 30 minutes
 
 ## Running it
 

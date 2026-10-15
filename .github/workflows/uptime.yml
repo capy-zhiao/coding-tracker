@@ -1,0 +1,19 @@
+# A free uptime check: every 30 minutes, ask the deployed app for /health. A failed run
+# emails whoever last edited this schedule. GitHub pauses scheduled workflows after 60
+# days without commits, so this needs an occasional push to keep running.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health:
+    if: vars.DEPLOY_DOMAIN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: GET /api/health
+        run: |
+          curl -fsS --max-time 20 --retry 2 --retry-delay 15 --retry-all-errors \
+            "https://${{ vars.DEPLOY_DOMAIN }}/api/health" | tee /dev/stderr | grep -q '"status":"ok"'

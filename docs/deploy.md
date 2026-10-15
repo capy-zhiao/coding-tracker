@@ -150,13 +150,87 @@ docker compose exec api python -m app.tools import --login capy-zhiao /tmp/histo
 
 ## 9. Updating
 
+By hand, building on the server:
+
 ```bash
 cd /opt/leetcode-tracker && git pull && docker compose up -d --build
 ```
 
-The API runs any new migrations as it starts.
+The API runs any new migrations as it starts. Once automatic deploys are set up (next
+section), pushing to main is enough.
 
-## 10. Restoring a backup
+## 10. Automatic deploys
+
+`.github/workflows/deploy.yml` runs after CI passes on main. It builds the three images
+on an ARM runner and pushes them to GHCR as `sha-<commit>` and `latest`. Then it has the
+server check out that commit and run `deploy/update.sh`, which pulls exactly those images
+and restarts what changed.
+
+It reaches the server through AWS Systems Manager rather than SSH, so no port is opened
+for GitHub's runners and GitHub stores no AWS keys. Each run signs in to AWS with GitHub's
+OIDC token as a role that can only send commands to this one instance.
+
+1. **The packages.** After the first run of the workflow, open each package on GitHub
+   (profile → Packages → `leetcode-tracker-api`, `-web`, `-backup`) → Package settings →
+   Change visibility → Public, so the server can pull without a token. The code is
+   public anyway.
+2. **Let SSM manage the instance.** IAM → Roles → Create role → AWS service, EC2 → attach
+   `AmazonSSMManagedInstanceCore` → name it `leetcode-ec2`. EC2 → the instance → Actions →
+   Security → Modify IAM role → `leetcode-ec2`. Ubuntu AMIs already run the SSM agent;
+   after a few minutes the instance shows up under Systems Manager → Fleet Manager.
+3. **Trust GitHub.** IAM → Identity providers → Add provider → OpenID Connect, provider
+   URL `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
+4. **The deploy role.** IAM → Roles → Create role → Web identity → that provider,
+   audience `sts.amazonaws.com`. Replace its trust policy with this one, which only lets
+   main of this repository assume it:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Effect": "Allow",
+       "Principal": {"Federated": "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"},
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+         "StringEquals": {
+           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+           "token.actions.githubusercontent.com:sub": "repo:capy-zhiao/leetcode-tracker:ref:refs/heads/main"
+         }
+       }
+     }]
+   }
+   ```
+
+   and give it this inline policy:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": "ssm:SendCommand",
+         "Resource": [
+           "arn:aws:ec2:ca-central-1:<account-id>:instance/<instance-id>",
+           "arn:aws:ssm:ca-central-1::document/AWS-RunShellScript"
+         ]
+       },
+       {"Effect": "Allow", "Action": "ssm:GetCommandInvocation", "Resource": "*"}
+     ]
+   }
+   ```
+
+5. **Tell the workflow.** GitHub → the repository → Settings → Secrets and variables →
+   Actions → Variables: `AWS_DEPLOY_ROLE_ARN` (the role's ARN), `AWS_REGION`
+   (`ca-central-1`), `EC2_INSTANCE_ID` (`i-...`), `DEPLOY_DOMAIN`
+   (`leetcode.zhiaowei.dev`). Variables, not secrets: none of these grant anything on
+   their own.
+
+Run it once from the Actions tab (Deploy → Run workflow) to check. `DEPLOY_DOMAIN` also
+turns on `uptime.yml`, which requests `/api/health` every 30 minutes and fails, emailing
+you, when the site doesn't answer.
+
+## 11. Restoring a backup
 
 ```bash
 docker compose exec backup ls /backups                       # the last three

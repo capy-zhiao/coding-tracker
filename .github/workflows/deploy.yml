@@ -1,0 +1,114 @@
+# After CI passes on main: build the three images for ARM, push them to GHCR, then have
+# the server switch to them. The server is reached through AWS Systems Manager, not SSH:
+# no inbound port is open for CI, and GitHub holds no AWS keys. It signs in with OIDC as
+# a role that may only run commands on that one instance (see docs/deploy.md).
+#
+# Until the repository variables below are set, only the images are built and pushed.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  images:
+    name: Build and push ${{ matrix.image }}
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04-arm            # native arm64 builds for the t4g instance
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: api
+            context: .
+            file: backend/Dockerfile
+          - image: web
+            context: frontend
+            file: frontend/Dockerfile
+          - image: backup
+            context: deploy/backup
+            file: deploy/backup/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag from the commit
+        id: tag
+        run: echo "short=sha-${SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/capy-zhiao/leetcode-tracker-${{ matrix.image }}:${{ steps.tag.outputs.short }}
+            ghcr.io/capy-zhiao/leetcode-tracker-${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Update the server
+    needs: images
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.EC2_INSTANCE_ID != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write                    # the OIDC token AWS trades for the deploy role
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE: ${{ vars.EC2_INSTANCE_ID }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Check out the commit on the server and start its images
+        run: |
+          app=/opt/leetcode-tracker
+          as_owner="runuser -u ubuntu --"
+          script="cd $app && $as_owner git fetch -q origin && $as_owner git checkout -q --detach $SHA && $as_owner sh deploy/update.sh"
+          id=$(aws ssm send-command --instance-ids "$INSTANCE" \
+                 --document-name AWS-RunShellScript --comment "deploy ${SHA::7}" \
+                 --parameters "commands=[\"$script\"]" \
+                 --query Command.CommandId --output text)
+          for _ in $(seq 1 60); do               # up to 10 minutes
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE" \
+                       --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) continue ;; esac
+            break
+          done
+          aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "SSM status: $status"
+          test "$status" = Success
+
+      - name: The site answers
+        if: vars.DEPLOY_DOMAIN != ''
+        run: |
+          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors \
+            "https://${{ vars.DEPLOY_DOMAIN }}/api/health"
