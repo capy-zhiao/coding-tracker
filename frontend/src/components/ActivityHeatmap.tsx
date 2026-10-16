@@ -34,12 +34,13 @@ function addDays(d: Date, n: number) {
 // A day's work is a handful of attempts (the default caps are 4 reviews and 3 new), so the
 // steps are absolute rather than relative to the busiest day: one busy day shouldn't make
 // every ordinary day look idle.
+// Colours are in index.css: one scale for light, another for dark.
 function tone(n: number) {
-  if (n === 0) return 'bg-slate-200'            // 100 vanishes on a white card
-  if (n === 1) return 'bg-emerald-200'
-  if (n === 2) return 'bg-emerald-300'
-  if (n <= 4) return 'bg-emerald-500'
-  return 'bg-emerald-700'
+  if (n === 0) return 'heat-0'
+  if (n === 1) return 'heat-1'
+  if (n === 2) return 'heat-2'
+  if (n <= 4) return 'heat-3'
+  return 'heat-4'
 }
 
 const LEGEND = [0, 1, 2, 3, 5]

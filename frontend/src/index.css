@@ -4,6 +4,11 @@
 
 @layer base {
   body { @apply bg-slate-50 text-slate-800 antialiased; }
+
+  /* Activity heatmap. Its own scale instead of the mirrored palette: mirroring turns the
+     busiest days the palest in the dark, where the grid should get brighter as it fills. */
+  :root { --heat-0: #e2e8f0; --heat-1: #a7f3d0; --heat-2: #6ee7b7; --heat-3: #10b981; --heat-4: #047857; }
+  .dark { --heat-0: #1e293b; --heat-1: #064e3b; --heat-2: #047857; --heat-3: #10b981; --heat-4: #34d399; }
 }
 
 @layer components {
@@ -14,4 +19,9 @@
   .btn-primary { @apply bg-slate-900 text-white border-slate-900 hover:bg-slate-700; }
   .chip { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium
                   whitespace-nowrap; }
+  .heat-0 { background-color: var(--heat-0); }
+  .heat-1 { background-color: var(--heat-1); }
+  .heat-2 { background-color: var(--heat-2); }
+  .heat-3 { background-color: var(--heat-3); }
+  .heat-4 { background-color: var(--heat-4); }
 }
