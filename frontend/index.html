@@ -4,14 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Coding Tracker</title>
-    <!-- Apply the theme before first paint (mirrors src/lib/theme.ts) -->
+    <!-- Apply the theme before first paint (mirrors src/lib/theme.ts): dark unless the
+         user chose light -->
     <script>
-      try {
-        var t = localStorage.getItem('theme')
-        if (t !== 'light' && t !== 'dark')
-          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        if (t === 'dark') document.documentElement.classList.add('dark')
-      } catch (e) {}
+      var t = 'dark'
+      try { if (localStorage.getItem('theme') === 'light') t = 'light' } catch (e) {}
+      if (t === 'dark') document.documentElement.classList.add('dark')
     </script>
   </head>
   <body>
