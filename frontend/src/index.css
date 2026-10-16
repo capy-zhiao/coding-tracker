@@ -238,12 +238,13 @@
 @keyframes grow-y { from { transform: scaleY(0); } }
 @keyframes sweep { 60%, 100% { transform: translateX(100%); } }
 
-/* Motion is decoration here: with reduced motion everything appears in place at once */
+/* Motion is decoration here: with reduced motion everything appears in place at once.
+   `none` rather than near-zero durations: a duration on every element turns the default
+   `transition-property: all` into real transitions, and a theme switch could leave text
+   stuck on the old colour. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    animation-delay: 0ms !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
   }
 }
