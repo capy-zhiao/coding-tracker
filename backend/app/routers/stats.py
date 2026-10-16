@@ -2,7 +2,7 @@
 from collections import Counter
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -79,7 +79,8 @@ def overview(db: Session = Depends(get_db), user: User = Depends(get_current_use
 
 @router.get("/heatmap")
 def heatmap(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user), days: int = 90,
+    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+    days: int = Query(90, ge=1, le=371),
 ):
     """Attempts per day for the last N days — a GitHub-style contribution grid."""
     start = user_today(user) - timedelta(days=days)

@@ -83,6 +83,19 @@ def test_overview_stats(client, sample_problems):
     assert any(c["chapter_num"] == 11 for c in s["by_chapter"])
 
 
+def test_heatmap_counts_attempts_per_study_day(client, sample_problems):
+    client.post("/review/1/attempt", json={"grade": "again", "seconds": 900})
+    client.post("/review/1/attempt", json={"grade": "good", "seconds": 300})
+    today = client.get("/auth/me").json()["today"]
+    assert client.get("/stats/heatmap").json() == [{"date": today, "count": 2}]
+
+
+def test_heatmap_window_is_bounded(client):
+    assert client.get("/stats/heatmap", params={"days": 371}).status_code == 200
+    for days in (0, 372):
+        assert client.get("/stats/heatmap", params={"days": days}).status_code == 422
+
+
 def test_attempt_history_for_diff(client, sample_problems):
     client.post("/review/1/attempt", json={"grade": "again", "code": "v1"})
     client.post("/review/1/attempt", json={"grade": "good", "code": "v2"})

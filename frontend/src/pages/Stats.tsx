@@ -1,7 +1,8 @@
-// Stats dashboard: headline numbers and progress by chapter.
+// Stats dashboard: headline numbers, daily activity and progress by chapter.
 // It also holds the problem library: each chapter row expands into its problem list, and
 // the search box finds any problem by number or title.
 import { useEffect, useState } from 'react'
+import ActivityHeatmap from '../components/ActivityHeatmap'
 import ProblemListRow from '../components/ProblemListRow'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -21,6 +22,8 @@ export default function Stats() {
         <Metric label="Average time"
                 value={s.avg_seconds ? `${Math.round(s.avg_seconds / 60)} min` : '—'} />
       </div>
+
+      <ActivityHeatmap />
 
       <CreditCard />
 
