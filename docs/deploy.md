@@ -138,15 +138,12 @@ Sign in on the server once, so your account exists. Then, from your machine:
 
 ```bash
 cd backend && ./.venv/bin/python -m app.tools export --login local > history.json
-scp -i leetcode.pem history.json ubuntu@<elastic-ip>:/opt/coding-tracker/
+ssh -i leetcode.pem ubuntu@<elastic-ip> 'cd /opt/coding-tracker &&
+  docker compose exec -T api python -m app.tools import --login capy-zhiao /dev/stdin' < history.json
 ```
 
-and on the server:
-
-```bash
-docker compose cp history.json api:/tmp/history.json
-docker compose exec api python -m app.tools import --login capy-zhiao /tmp/history.json
-```
+The file goes in on standard input rather than through `docker compose cp`, which keeps
+the copy's owner and mode, so the API's own user couldn't read it.
 
 ## 9. Updating
 
