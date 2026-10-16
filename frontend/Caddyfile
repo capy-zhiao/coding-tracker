@@ -27,6 +27,9 @@
 		# Hashed file names never change content, so browsers may keep them for a year
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# Everything else (index.html) is checked on every load, so a deploy shows at once
+		@pages not path /assets/*
+		header @pages Cache-Control "no-cache"
 		# Client-side routes (/stats, /settings, ...) all load index.html
 		try_files {path} /index.html
 		file_server
