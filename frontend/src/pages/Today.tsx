@@ -2,9 +2,12 @@
 // J / K walk the queue, Enter opens the highlighted item — no mouse needed.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { PartyPopper, RefreshCw, RotateCcw, Sparkles, Wrench, type LucideIcon } from 'lucide-react'
 import LoadChart, { type ForecastRow } from '../components/LoadChart'
 import ProblemRow, { rowHref } from '../components/ProblemRow'
+import SectionTitle, { type Tone } from '../components/SectionTitle'
 import { api } from '../lib/api'
+import { useCountUp } from '../lib/motion'
 import { useHotkeys } from '../lib/useHotkeys'
 import type { DailyQueue, QueueItem } from '../lib/types'
 
@@ -109,10 +112,10 @@ export default function Today() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">{queue.date}</h1>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h1 className="text-xl font-semibold font-mono tracking-tight">{queue.date}</h1>
         <p className="text-sm text-slate-500">
-          <b>{queue.total_due}</b> due today
+          <DueCount n={queue.total_due} /> due today
           {queue.deferred > 0 && <> · ranked by priority, <b>{queue.deferred}</b> deferred</>}
           <span className="ml-2 text-xs text-slate-400">
             <kbd className="border border-slate-200 rounded px-1">J</kbd>
@@ -121,18 +124,18 @@ export default function Today() {
         </p>
       </div>
 
-      <Section title="🔁 Review"
+      <Section icon={RotateCcw} tone="sky" title="Review"
                hint={`${shuffled ? 'random pick' : 'ranked by priority'} · at most 2 per chapter or pattern, so the day stays mixed`}
                items={queue.reviews} selected={selected}
                action={queue.deferred > 0 && (
-                 <button className="btn text-xs py-1" onClick={nextBatch} disabled={swapping}
-                         title="Swap in a random batch of today's reviews (R)">
-                   ↻ Next batch
+                 <button className="btn text-xs py-1 inline-flex items-center gap-1.5" onClick={nextBatch}
+                         disabled={swapping} title="Swap in a random batch of today's reviews (R)">
+                   <RefreshCw size={13} className={swapping ? 'animate-spin' : ''} /> Next batch
                  </button>
                )} />
-      <Section title="🆕 New" hint="NeetCode 150, then Top Interview 150, then LeetCode 75 · Bit & Math and Hards wait"
+      <Section icon={Sparkles} tone="indigo" title="New" hint="NeetCode 150, then Top Interview 150, then LeetCode 75 · Bit & Math and Hards wait"
                items={queue.new_problems} selected={selected} />
-      <Section title="🔧 Template drill" hint="five minutes of blind writing before you start"
+      <Section icon={Wrench} tone="amber" title="Template drill" hint="five minutes of blind writing before you start"
                items={queue.templates} selected={selected} />
 
       <LoadChart rows={forecast} reviewCap={queue.review_cap} />
@@ -140,23 +143,34 @@ export default function Today() {
   )
 }
 
+/** The day's total, counting up as the page opens */
+function DueCount({ n }: { n: number }) {
+  const shown = useCountUp(n)
+  return <b className="font-mono text-gradient">{Math.round(shown)}</b>
+}
+
 function Section({
-  title, hint, items, selected, action,
-}: { title: string; hint: string; items: QueueItem[]; selected?: number; action?: ReactNode }) {
+  icon, tone, title, hint, items, selected, action,
+}: { icon: LucideIcon; tone: Tone; title: string; hint: string; items: QueueItem[]
+     selected?: number; action?: ReactNode }) {
   return (
     <section className="card">
-      <div className="flex items-baseline gap-2 mb-2">
-        <h2 className="font-medium">{title}</h2>
-        <span className="text-xs text-slate-400">{hint}</span>
+      <div className="flex items-center gap-2 mb-2">
+        <SectionTitle icon={icon} tone={tone}>{title}</SectionTitle>
+        <span className="hidden sm:inline text-xs text-slate-400 truncate">{hint}</span>
         <div className="ml-auto flex items-center gap-3">
           {action}
-          <span className="text-sm text-slate-400">{items.length}</span>
+          <span className="text-sm font-mono text-slate-400">{items.length}</span>
         </div>
       </div>
       {items.length === 0
-        ? <p className="text-sm text-slate-400 px-3 py-2">Nothing here today 🎉</p>
-        : (
-          <div className="-mx-1">
+        ? (
+          <p className="flex items-center gap-2 text-sm px-3 py-2">
+            <PartyPopper size={16} className="text-amber-500 pop" />
+            <span className="text-gradient font-medium">All done here for today</span>
+          </p>
+        ) : (
+          <div className="-mx-1 stagger">
             {items.map((i) => (
               <div key={i.problem.id} id={`row-${i.problem.number}`}>
                 <ProblemRow item={i} selected={i.problem.number === selected} />

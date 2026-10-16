@@ -8,10 +8,61 @@
 // focus out of the field entirely. Monaco gives auto-indent, bracket matching and syntax
 // highlighting, and lets us bind Cmd/Ctrl+Enter to submit from inside the editor — a
 // document-level key handler never sees keys Monaco has swallowed.
-import Editor, { type OnMount } from '@monaco-editor/react'
+import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react'
 import { useRef } from 'react'
 import '../lib/monaco-setup'
 import { useTheme } from '../lib/theme'
+
+// Tokyo Night and Tokyo Night Day, to match the rest of the app
+const defineThemes: BeforeMount = (monaco) => {
+  monaco.editor.defineTheme('tokyo-night', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '565f89', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'bb9af7' },
+      { token: 'string', foreground: '9ece6a' },
+      { token: 'number', foreground: 'ff9e64' },
+      { token: 'type', foreground: '2ac3de' },
+      { token: 'delimiter', foreground: '89ddff' },
+      { token: 'identifier', foreground: 'c0caf5' },
+    ],
+    colors: {
+      'editor.background': '#1a1b26',
+      'editor.foreground': '#c0caf5',
+      'editorLineNumber.foreground': '#3b4261',
+      'editorLineNumber.activeForeground': '#737aa2',
+      'editor.lineHighlightBackground': '#1e2030',
+      'editor.selectionBackground': '#364a8288',
+      'editorCursor.foreground': '#c0caf5',
+      'editorIndentGuide.background1': '#292e42',
+      'editorBracketMatch.background': '#3d59a155',
+      'editorBracketMatch.border': '#7aa2f7',
+    },
+  })
+  monaco.editor.defineTheme('tokyo-day', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '848cb5', fontStyle: 'italic' },
+      { token: 'keyword', foreground: '9854f1' },
+      { token: 'string', foreground: '587539' },
+      { token: 'number', foreground: 'b15c00' },
+      { token: 'type', foreground: '007197' },
+      { token: 'delimiter', foreground: '006a83' },
+      { token: 'identifier', foreground: '3760bf' },
+    ],
+    colors: {
+      'editor.background': '#f6f7fb',
+      'editor.foreground': '#3760bf',
+      'editorLineNumber.foreground': '#a8aecb',
+      'editorLineNumber.activeForeground': '#68709a',
+      'editor.lineHighlightBackground': '#eceef5',
+      'editor.selectionBackground': '#b7c1e3aa',
+      'editorCursor.foreground': '#3760bf',
+    },
+  })
+}
 
 interface Props {
   value: string
@@ -39,6 +90,8 @@ export default function CodeEditor({
       () => submitRef.current?.(),
     )
     if (!readOnly) editor.focus()
+    // Monaco measures glyphs once; measure again when the web font has arrived
+    document.fonts?.ready.then(() => monaco.editor.remeasureFonts())
   }
 
   return (
@@ -46,7 +99,8 @@ export default function CodeEditor({
       <Editor
         height={height}
         language={language}
-        theme={theme === 'dark' ? 'vs-dark' : 'light'}
+        theme={theme === 'dark' ? 'tokyo-night' : 'tokyo-day'}
+        beforeMount={defineThemes}
         value={value}
         onChange={(v) => onChange(v ?? '')}
         onMount={handleMount}
@@ -54,7 +108,8 @@ export default function CodeEditor({
         options={{
           readOnly,
           fontSize: 13,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontFamily: '"JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontLigatures: true,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           lineNumbers: 'on',

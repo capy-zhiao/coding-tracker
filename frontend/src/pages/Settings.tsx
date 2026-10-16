@@ -1,5 +1,7 @@
 // Settings: your study day and daily limits, and where your AI requests get their key.
 import { useState, type FormEvent } from 'react'
+import { Bot, CalendarDays, Lock } from 'lucide-react'
+import SectionTitle from '../components/SectionTitle'
 import { clearAiKey, loadAiKey, saveAiKey, type AiKey } from '../lib/aiKey'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -43,7 +45,7 @@ function StudyDay() {
   return (
     <section className="card space-y-4">
       <div>
-        <h2 className="font-medium">📅 Study day</h2>
+        <SectionTitle icon={CalendarDays} tone="sky">Study day</SectionTitle>
         <p className="text-sm text-slate-500">
           Your day starts at midnight in this time zone: it decides when tomorrow's reviews
           appear and how your streak counts. Today is {me.today}.
@@ -88,7 +90,7 @@ function AiSection() {
   if (me.provider === 'local' || me.ai_enabled) {
     return (
       <section className="card space-y-1">
-        <h2 className="font-medium">🤖 AI</h2>
+        <SectionTitle icon={Bot} tone="indigo">AI</SectionTitle>
         <p className="text-sm text-slate-500">
           {me.ai_enabled
             ? "AI features use this server's key (backend/.env)."
@@ -127,15 +129,16 @@ function KeyForm() {
   return (
     <section className="card space-y-4">
       <div>
-        <h2 className="font-medium">🤖 Your AI key</h2>
+        <SectionTitle icon={Bot} tone="indigo">Your AI key</SectionTitle>
         <p className="text-sm text-slate-500">
           Complexity checks and mock interviews run on your own API key, so you pay your
           provider directly.
         </p>
       </div>
-      <p className="text-sm rounded-lg border border-slate-200 bg-slate-50 p-3">
-        🔒 Your key is saved in this browser only. It's sent with each AI request and passed
-        through to the provider; our server never stores or logs it.
+      <p className="text-sm rounded-lg border border-slate-200 bg-slate-50 p-3 flex gap-2">
+        <Lock size={15} className="shrink-0 mt-0.5 text-emerald-500" />
+        <span>Your key is saved in this browser only. It's sent with each AI request and passed
+        through to the provider; our server never stores or logs it.</span>
       </p>
 
       <form onSubmit={save} className="space-y-3 max-w-md">

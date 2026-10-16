@@ -4,6 +4,8 @@
 // year on a desktop and a few months on a phone without scrolling. Days are the user's
 // study days, the same ones the streak counts, so an evening session lands on that evening.
 import { useEffect, useRef, useState } from 'react'
+import { Flame } from 'lucide-react'
+import SectionTitle from './SectionTitle'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -105,7 +107,7 @@ export default function ActivityHeatmap() {
   return (
     <section className="card">
       <div className="flex items-baseline gap-2 flex-wrap">
-        <h2 className="font-medium">🔥 Activity</h2>
+        <SectionTitle icon={Flame} tone="orange">Activity</SectionTitle>
         <span className="text-xs text-slate-400">
           {total} attempt{total === 1 ? '' : 's'} on {active} day{active === 1 ? '' : 's'} in the last {span}
         </span>
@@ -139,7 +141,7 @@ export default function ActivityHeatmap() {
             }}
             onMouseLeave={() => setHover(null)}
           >
-            {columns.flat().map((day) => {
+            {columns.flat().map((day, i) => {
               const key = iso(day)
               if (day > today) return <span key={key} />
               const n = counts.get(key) ?? 0
@@ -147,7 +149,9 @@ export default function ActivityHeatmap() {
               return (
                 <span
                   key={key}
-                  className={`rounded-sm ${tone(n)} ${isToday ? 'ring-1 ring-slate-500' : ''} ${
+                  // Fills in as a wave from the oldest week to this one
+                  style={{ animationDelay: `${Math.floor(i / 7) * 14 + (i % 7) * 6}ms` }}
+                  className={`heat-in rounded-sm ${tone(n)} ${isToday ? 'ring-1 ring-sky-400' : ''} ${
                     hover === key ? 'outline outline-1 outline-slate-600' : ''}`}
                   onMouseEnter={() => setHover(key)}
                   onClick={() => setHover(key)}

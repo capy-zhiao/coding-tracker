@@ -1,6 +1,8 @@
 // Template drill index: the 15 algorithm skeletons, with their SRS state.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Wrench } from 'lucide-react'
+import SectionTitle from '../components/SectionTitle'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { TemplateSummary } from '../lib/types'
@@ -32,12 +34,12 @@ export default function Drills() {
 
       <div className="card">
         <div className="flex items-baseline gap-2 mb-2">
-          <h2 className="font-medium">🔧 Due today</h2>
-          <span className="ml-auto text-sm text-slate-400">{due.length} / {rows.length}</span>
+          <SectionTitle icon={Wrench} tone="amber">Due today</SectionTitle>
+          <span className="ml-auto text-sm font-mono text-slate-400">{due.length} / {rows.length}</span>
         </div>
         {rows.length === 0
           ? <p className="text-sm text-slate-400 px-1 py-2">Loading…</p>
-          : <div className="-mx-1">{rows.map((t) => <Row key={t.number} t={t} today={today} />)}</div>}
+          : <div className="-mx-1 stagger">{rows.map((t) => <Row key={t.number} t={t} today={today} />)}</div>}
       </div>
     </div>
   )
@@ -52,15 +54,16 @@ function Row({ t, today }: { t: TemplateSummary; today: string }) {
   return (
     <Link
       to={`/drill/${t.number}`}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition"
+      className="row flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100/60 transition"
     >
       <span className={`w-1.5 h-1.5 rounded-full ${
-        mastered ? 'bg-emerald-500' : isDue ? 'bg-amber-500' : 'bg-slate-200'
+        mastered ? 'bg-emerald-500 shadow-[0_0_8px] shadow-emerald-400'
+          : isDue ? 'bg-amber-500 shadow-[0_0_8px] shadow-amber-400 animate-pulse' : 'bg-slate-300'
       }`} />
       <span className="flex-1 font-medium">{t.title}</span>
       <span className="text-xs text-slate-400">{t.check_count} checkpoints</span>
       <span className="text-xs text-slate-400 w-28 truncate text-right">{t.chapter}</span>
-      <span className="text-xs w-20 text-right">
+      <span className="text-xs font-mono w-20 text-right">
         {isDue ? <span className="text-amber-600">due</span>
                : <span className="text-slate-400">{interval}d</span>}
       </span>

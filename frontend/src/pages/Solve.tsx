@@ -5,6 +5,7 @@
 // anywhere including inside the editor.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { Bot, CircleCheck, CircleX, Clock, History, Lightbulb } from 'lucide-react'
 import CodeEditor from '../components/CodeEditor'
 import ComplexityPicker from '../components/ComplexityPicker'
 import GradeBar from '../components/GradeBar'
@@ -162,7 +163,7 @@ export default function Solve() {
         {p.notes && (
           <details className="mt-3">
             <summary className="text-sm text-slate-500 cursor-pointer">
-              💡 My earlier notes (open only if you're stuck)
+              <Lightbulb size={14} className="inline -mt-0.5 mr-1 text-amber-500" />My earlier notes (open only if you're stuck)
             </summary>
             <pre className="mt-2 text-sm bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{p.notes}</pre>
           </details>
@@ -197,7 +198,7 @@ export default function Solve() {
         {prev?.code && prev.code !== code && (
           <details className="mt-3">
             <summary className="text-sm text-slate-500 cursor-pointer">
-              📜 Last time ({new Date(prev.created_at).toLocaleDateString()}, {prev.grade})
+              <History size={14} className="inline -mt-0.5 mr-1" />Last time ({new Date(prev.created_at).toLocaleDateString()}, {prev.grade})
             </summary>
             <pre className="mt-2 text-xs bg-slate-50 rounded-lg p-3 overflow-x-auto">{prev.code}</pre>
           </details>
@@ -218,7 +219,7 @@ export default function Solve() {
           </label>
         </div>
         <GradeBar value={grade} onChange={setGrade} />
-        {suggestion && <p className="text-xs text-slate-500">🕐 Suggested from your time: {suggestion}</p>}
+        {suggestion && <p className="text-xs text-slate-500"><Clock size={12} className="inline -mt-0.5 mr-1" />Suggested from your time: {suggestion}</p>}
 
         <ComplexityPicker
           time={timeComplexity} space={spaceComplexity}
@@ -238,8 +239,8 @@ export default function Solve() {
         />
 
         {result ? (
-          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-900">
-            ✅ Recorded — this one comes back in <b>{result.days}</b> day{result.days === 1 ? '' : 's'}.
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 pop">
+            <CircleCheck size={15} className="inline -mt-0.5 mr-1.5 text-emerald-500" />Recorded — this one comes back in <b>{result.days}</b> day{result.days === 1 ? '' : 's'}.
             <Link to="/" className="underline ml-2">Back to today</Link>
           </div>
         ) : (
@@ -295,7 +296,10 @@ function HistoryRow({ a, pending = false }: { a: Attempt; pending?: boolean }) {
           <span className="text-xs"
                 title={a.complexity_ai ? 'complexity, judged by AI against this code'
                                        : 'complexity, checked against the reference'}>
-            {a.complexity_ok ? '✅' : '❌'} O{a.complexity_ai && ' 🤖'}
+            <span className="inline-flex items-center gap-0.5">
+              {a.complexity_ok ? <CircleCheck size={12} className="text-emerald-500" /> : <CircleX size={12} className="text-red-500" />}
+              O{a.complexity_ai && <Bot size={12} className="text-indigo-500" />}
+            </span>
           </span>
         )}
         <span className="flex-1 truncate text-xs">{a.note}</span>
@@ -322,8 +326,8 @@ function AiComplexity({
 }) {
   if (state === 'running') {
     return (
-      <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-        🤖 Checking your complexity against the code you wrote… <Elapsed />
+      <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3 thinking">
+        <Bot size={14} className="inline -mt-0.5 mr-1.5" />Checking your complexity against the code you wrote… <Elapsed />
         <span className="text-indigo-500"> · usually 20s to 2 min, longer when it has to
         write a faster version of your code</span>
       </p>
@@ -334,7 +338,7 @@ function AiComplexity({
       <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3
                       flex items-center gap-3">
         <span className="flex-1">
-          🤖 AI check failed: {error} — showing the check against the reference answer instead.
+          <Bot size={14} className="inline -mt-0.5 mr-1.5" />AI check failed: {error} — showing the check against the reference answer instead.
         </span>
         {onRetry && <button className="btn text-xs" onClick={onRetry}>Retry</button>}
       </div>
@@ -354,9 +358,9 @@ function AiComplexity({
   const hasRewrite = Boolean(verdict.optimized_diff?.length && verdict.optimized_code)
 
   return (
-    <div className="text-sm bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-3">
+    <div className="text-sm bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-3 page-in">
       <div className="flex items-baseline">
-        <p className="font-medium text-indigo-950">🤖 Complexity check</p>
+        <p className="font-medium text-indigo-800"><Bot size={14} className="inline -mt-0.5 mr-1.5" />Complexity check</p>
         {verdict.model && <p className="ml-auto text-[11px] text-indigo-900/50">judged by {verdict.model}</p>}
       </div>
 

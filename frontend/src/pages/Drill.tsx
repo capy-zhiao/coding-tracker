@@ -6,6 +6,7 @@
 // until you submit, and the checkpoints are the ones that actually cause bugs.
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { CircleCheck, CircleX, TriangleAlert } from 'lucide-react'
 import CodeEditor from '../components/CodeEditor'
 import Timer, { useTimer } from '../components/Timer'
 import { api } from '../lib/api'
@@ -109,8 +110,8 @@ export default function Drill() {
 
       {checked && (
         saved ? (
-          <div className="card bg-emerald-50 border-emerald-200 text-sm text-emerald-900">
-            ✅ Recorded — this drill comes back in <b>{saved.days}</b> day
+          <div className="card bg-emerald-50 border-emerald-200 text-sm text-emerald-800 pop">
+            <CircleCheck size={15} className="inline -mt-0.5 mr-1.5 text-emerald-500" />Recorded — this drill comes back in <b>{saved.days}</b> day
             {saved.days === 1 ? '' : 's'}.
             <Link to="/drill" className="underline ml-2">Back to drills</Link>
           </div>
@@ -148,7 +149,8 @@ function Verdict({ r, gaveUp }: { r: BlindWriteResult; gaveUp: boolean }) {
       <div className={`card ${r.passed ? 'bg-emerald-50 border-emerald-200'
                                        : 'bg-amber-50 border-amber-200'}`}>
         <div className="flex items-baseline gap-3">
-          <span className="text-lg">{r.passed ? '✅' : '⚠️'}</span>
+          <span className="self-center pop">{r.passed ? <CircleCheck size={20} className="text-emerald-500" />
+                                                  : <TriangleAlert size={20} className="text-amber-500" />}</span>
           <p className="font-medium flex-1">{gaveUp ? 'Reference revealed.' : r.verdict}</p>
           <span className="text-sm text-slate-500">
             {hit}/{r.checks.length} checkpoints · {Math.round(r.similarity * 100)}% shape match
@@ -158,10 +160,11 @@ function Verdict({ r, gaveUp }: { r: BlindWriteResult; gaveUp: boolean }) {
 
       <div className="card">
         <h2 className="font-medium mb-2">Checkpoints</h2>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 stagger">
           {r.checks.map((c) => (
             <div key={c.id} className="flex gap-2 text-sm">
-              <span className="mt-0.5">{c.passed ? '✅' : '❌'}</span>
+              <span className="mt-0.5 shrink-0">{c.passed ? <CircleCheck size={15} className="text-emerald-500" />
+                                                     : <CircleX size={15} className="text-red-500" />}</span>
               <div>
                 <p className={c.passed ? 'text-slate-600' : 'font-medium text-slate-900'}>
                   {c.label}

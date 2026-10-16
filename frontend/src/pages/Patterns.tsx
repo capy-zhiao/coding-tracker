@@ -6,6 +6,7 @@
 // revision list.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Wrench } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTime } from '../components/Timer'
 import type { PatternStat, Problem } from '../lib/types'
@@ -38,7 +39,7 @@ export default function Patterns() {
         </p>
       </div>
 
-      <div className="card divide-y divide-slate-100">
+      <div className="card divide-y divide-slate-100 stagger">
         {rows.map((p) => (
           <PatternRow
             key={p.id} p={p}
@@ -66,14 +67,14 @@ function PatternRow({ p, open, onToggle }: { p: PatternStat; open: boolean; onTo
   return (
     <div id={p.id} className="py-2.5 scroll-mt-20">
       <button onClick={onToggle} className="w-full flex items-center gap-3 text-left">
-        <span className={`w-1.5 h-8 rounded ${tone}`} />
+        <span className={`w-1.5 h-8 rounded-full ${tone}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
             <span className="font-medium">{p.label}</span>
             <span className="text-xs text-slate-400 truncate">{p.description}</span>
           </div>
           <div className="mt-1 h-1.5 bg-slate-100 rounded-full overflow-hidden max-w-xs">
-            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+            <div className="h-full bar-fill bar-mastered rounded-full" style={{ width: `${pct}%` }} />
           </div>
         </div>
         <div className="text-right text-xs text-slate-500 w-32 shrink-0">
@@ -93,8 +94,9 @@ function PatternRow({ p, open, onToggle }: { p: PatternStat; open: boolean; onTo
             <span>started {p.started}/{p.total}</span>
             {p.attempts > 0 && <span>again rate {Math.round(p.again_rate * 100)}%</span>}
             {p.template_number && (
-              <Link to={`/drill/${p.template_number}`} className="text-slate-900 underline">
-                🔧 drill this template
+              <Link to={`/drill/${p.template_number}`}
+                    className="inline-flex items-center gap-1 text-sky-600 hover:underline">
+                <Wrench size={12} /> drill this template
               </Link>
             )}
           </div>

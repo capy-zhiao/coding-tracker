@@ -1,6 +1,7 @@
 // Sign-in page, shown only when the server runs in github mode and nobody is signed in.
 // Local mode never gets here: /auth/me always answers with the local user.
 import { useEffect, useState } from 'react'
+import { Braces } from 'lucide-react'
 import { api } from '../lib/api'
 
 export default function Login() {
@@ -24,9 +25,14 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="card w-full max-w-sm text-center space-y-4 py-8">
-        <div className="text-3xl">🧠</div>
-        <h1 className="text-xl font-semibold">Coding Tracker</h1>
+      <div className="card card-glow w-full max-w-sm text-center space-y-5 py-10 page-in">
+        <span className="logo-mark logo-lg mx-auto"><Braces size={28} strokeWidth={2.25} /></span>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-gradient">Coding Tracker</h1>
+          <p className="font-mono text-xs text-slate-400 mt-1.5">
+            review(<span className="text-sky-500">today</span>)<span className="caret">▍</span>
+          </p>
+        </div>
         <p className="text-sm text-slate-500">
           Spaced repetition for NeetCode 150, Top Interview 150 and LeetCode 75: what to
           practise each day, when to review it, and whether your big-O was right.

@@ -5,6 +5,8 @@
 // points to self-check against.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Bot, Lightbulb, Mic, MicOff } from 'lucide-react'
+import SectionTitle from '../components/SectionTitle'
 import CodeEditor from '../components/CodeEditor'
 import Timer, { useTimer } from '../components/Timer'
 import { useAiAvailable } from '../lib/aiKey'
@@ -66,14 +68,14 @@ export default function Mock() {
     return (
       <div className="card space-y-4 max-w-lg">
         <div>
-          <h1 className="text-lg font-semibold">🎤 Mock interview</h1>
+          <SectionTitle as="h1" icon={Mic} tone="rose" className="text-lg font-semibold">Mock interview</SectionTitle>
           <p className="text-sm text-slate-500 mt-1">
             Random problem, a clock, and no notes. Follow-ups come after — that is where
             real interviews are won or lost.
           </p>
           {aiEnabled && (
             <p className="text-sm text-indigo-700 mt-1">
-              🤖 The interviewer reads the code you write and asks about it. Answer each
+              <Bot size={14} className="inline -mt-0.5 mr-1" />The interviewer reads the code you write and asks about it. Answer each
               question in writing and it gets graded.
             </p>
           )}
@@ -110,7 +112,7 @@ export default function Mock() {
       {phase === 'solving' && (
         <div className="card space-y-3">
           <p className="text-sm text-slate-500">
-            🔇 Interview mode: notes and past solutions are hidden. Talk through the approach
+            <MicOff size={14} className="inline -mt-0.5 mr-1" />Interview mode: notes and past solutions are hidden. Talk through the approach
             first, then code, then state the complexity.
           </p>
           {p.url && <a href={p.url} target="_blank" rel="noreferrer" className="btn inline-block">
@@ -145,9 +147,10 @@ export default function Mock() {
             {questions.length > 0 && <span className="text-xs text-slate-400 ml-2">about your code · answer in writing, AI grades each one</span>}
           </h2>
           {loading && (
-            <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+            <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3 thinking">
+              <Bot size={14} className="inline -mt-0.5 mr-1.5" />
               {aiEnabled && code.trim()
-                ? '🤖 The interviewer is reading your code… this can take about a minute.'
+                ? 'The interviewer is reading your code… this can take about a minute.'
                 : 'Loading questions…'}
             </p>
           )}
@@ -161,7 +164,7 @@ export default function Mock() {
               <div key={f.id} className="rounded-lg border border-slate-200 p-3">
                 <p className="font-medium text-sm">Q{i + 1}. {f.question}</p>
                 {open
-                  ? <p className="mt-2 text-sm text-slate-600 bg-slate-50 rounded p-2">💡 {f.hint}</p>
+                  ? <p className="mt-2 text-sm text-slate-600 bg-slate-50 rounded p-2"><Lightbulb size={14} className="inline -mt-0.5 mr-1 text-amber-500" />{f.hint}</p>
                   : <button className="btn text-xs mt-2"
                             onClick={() => setAnswered([...answered, f.id])}>
                       I've answered — show the key points
@@ -249,7 +252,7 @@ function QuestionCard({ q, index }: { q: InterviewQuestion; index: number }) {
           <details>
             <summary className="text-xs text-slate-500 cursor-pointer">Model answer and key points</summary>
             <p className="mt-1 text-slate-700">{grade.model_answer}</p>
-            <p className="mt-1 text-xs text-slate-500">💡 {grade.key_points}</p>
+            <p className="mt-1 text-xs text-slate-500"><Lightbulb size={12} className="inline -mt-0.5 mr-1 text-amber-500" />{grade.key_points}</p>
           </details>
         </div>
       )}

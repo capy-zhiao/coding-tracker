@@ -12,7 +12,7 @@ export default function ProblemListRow({ p, showChapter = false }: { p: Problem;
   const mastered = (p.state?.interval_days ?? 0) >= 21
   return (
     <Link to={`/solve/${p.number}`}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 text-sm">
+          className="row flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100/60 transition text-sm">
       <span className={`chip ${DIFF_COLOR[p.difficulty]}`}>{p.difficulty[0]}</span>
       <span className="font-mono text-xs text-slate-400 w-12 text-right">{p.number}</span>
       <span className="flex-1 truncate">{p.title}</span>

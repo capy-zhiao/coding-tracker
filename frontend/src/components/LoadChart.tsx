@@ -5,6 +5,8 @@
 // one scale, a backlog of 78 flattened a week of 1-7s into slivers a few pixels tall, so
 // the chart could not show the one thing it is for: spotting a pile-up ahead.
 import { useState } from 'react'
+import { TrendingUp } from 'lucide-react'
+import SectionTitle from './SectionTitle'
 
 export interface ForecastRow { date: string; count: number; overdue: number }
 
@@ -46,7 +48,7 @@ export default function LoadChart({ rows, reviewCap }: { rows: ForecastRow[]; re
   return (
     <div className="card">
       <div className="flex items-baseline gap-2">
-        <h2 className="font-medium">📈 Review load, next 14 days</h2>
+        <SectionTitle icon={TrendingUp} tone="cyan">Review load, next 14 days</SectionTitle>
         <span className="text-xs text-slate-400">newly due each day</span>
       </div>
 
@@ -103,10 +105,8 @@ export default function LoadChart({ rows, reviewCap }: { rows: ForecastRow[]; re
                   )}
                   {h > 0 && (
                     <div
-                      className={`w-full max-w-[24px] rounded-t transition-colors ${
-                        active ? 'bg-slate-600' : 'bg-slate-400'
-                      }`}
-                      style={{ height: h }}
+                      className={`load-bar w-full max-w-[24px] rounded-t ${active ? 'is-active' : ''}`}
+                      style={{ height: h, animationDelay: `${i * 40}ms` }}
                     />
                   )}
                 </div>
